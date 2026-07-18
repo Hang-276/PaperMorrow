@@ -299,6 +299,8 @@ class SettingsUpdate(BaseModel):
     timezone: Literal["Asia/Shanghai", "America/New_York", "America/Los_Angeles"] | None = None
     daily_count: int | None = Field(default=None, ge=1, le=30)
     daily_tag_ids: list[int] | None = None
+    daily_profile_ids: list[int] | None = None
+    daily_profile_mode: Literal["focus", "mixed"] | None = None
     top_venue_ratio: float | None = Field(default=None, ge=0, le=1)
     only_verified_top_venues: bool | None = None
     llm_provider: Literal["openai", "claude", "glm", "deepseek", "zhizengzeng"] | None = None

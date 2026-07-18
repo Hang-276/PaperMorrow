@@ -191,6 +191,8 @@ export type AppSettings = {
   timezone: string
   daily_count: number
   daily_tag_ids: number[]
+  daily_profile_ids: number[]
+  daily_profile_mode: 'focus'|'mixed'
   top_venue_ratio: number
   only_verified_top_venues: boolean
   llm_provider: 'openai' | 'claude' | 'glm' | 'deepseek' | 'zhizengzeng'
