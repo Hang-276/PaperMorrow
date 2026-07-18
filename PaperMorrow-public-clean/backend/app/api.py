@@ -13,23 +13,28 @@ from sqlalchemy import desc, or_, select
 from sqlalchemy.orm import Session
 
 from .deepwiki_service import run_deepwiki_job, validate_repository_url, wiki_is_complete
+from .domain_pack_service import adapter_catalog, apply_domain_pack, create_domain_pack, domain_pack_dict, search_preview
+from .domain_sources import test_source_config
 from .library_service import LibraryService, normalize_library_tag
 from .library_folder_service import LibraryFolderService
-from .llm import LLMClient
-from .models import ChatMessage, ChatSession, DeepWikiJob, LibraryEntry, LibraryTag, LLMProfile, Paper, PaperNote, PaperStudyState, Recommendation, RecommendationBatch, ResearchProfile, ResearchStudy, Tag, ZoteroLink
+from .llm import LLMClient, LLMNotConfigured
+from .models import ChatMessage, ChatSession, DeepWikiJob, DomainPack, LibraryEntry, LibraryTag, LLMProfile, Paper, PaperNote, PaperStudyState, Recommendation, RecommendationBatch, ResearchProfile, ResearchProject, ResearchProjectNote, ResearchProjectPaper, ResearchProjectStudy, ResearchStudy, Tag, ZoteroLink
 from .paper_sources import SemanticScholarSource
 from .paper_document_service import get_or_extract_paper_text
 from .recommendation import RecommendationService
 from .repository_service import RepositoryService
 from .scheduler import sync_scheduler
 from .reader_service import cached_pdf_path, reader_figure_path, save_reader_figure
-from .schemas import ChatSessionCreate, GenerateRequest, LibraryFolderCreate, LibraryImportRequest, LibraryPaperFoldersRequest, LibraryPaperTagsRequest, LibraryScanRequest, LibraryTagCreate, LibraryTagUpdate, LLMProfileCreate, LLMProfileUpdate, NoteRequest, PaperChatRequest, ReaderFigureRequest, ReaderTranslateRequest, RepositoryBindRequest, ResearchProfileCreate, ResearchProfileUpdate, ResearchStudyCreate, SettingsUpdate, StudyStateRequest
+from .schemas import ChatSessionCreate, DomainPackCreate, DomainPackUpdate, DomainSearchPreviewRequest, DomainSourceTestRequest, GenerateRequest, KnowledgeEdgeCreate, KnowledgeNodeCreate, LibraryFolderCreate, LibraryImportRequest, LibraryPaperFoldersRequest, LibraryPaperTagsRequest, LibraryScanRequest, LibraryTagCreate, LibraryTagUpdate, LLMProfileCreate, LLMProfileUpdate, NoteRequest, PaperChatRequest, PaperEvidenceUpdate, PaperResourceCreate, PaperVersionLinkRequest, ReaderFigureRequest, ReaderTranslateRequest, RepositoryBindRequest, ResearchProfileCreate, ResearchProfileUpdate, ResearchProjectChatRequest, ResearchProjectCreate, ResearchProjectNoteCreate, ResearchProjectPaperRequest, ResearchProjectPaperUpdate, ResearchProjectSearchRequest, ResearchProjectUpdate, ResearchStudyCreate, SettingsUpdate, StudyStateRequest
 from .serializers import batch_dict, job_dict, library_tag_dict, paper_dict, research_profile_dict, tag_dict
 from .settings_service import delete_llm_profile_key, get_active_llm_profile, get_settings, list_llm_profiles, llm_profile_dict, save_llm_profile_key, save_secrets, update_settings
 from .usage_service import token_usage_stats
 from .database import get_db
 from .zotero_service import ZoteroError, ZoteroService
 from .research_service import ResearchService, research_study_dict
+from .project_service import PAPER_ROLES, READING_STATUSES, add_project_paper, load_project, project_dict, reindex_project, save_chat, search_project
+from .evidence_service import evidence_dict, link_versions, replace_analysis_evidence, split_version, undo_last_version_action, work_timeline
+from .knowledge_graph_service import add_resource, check_dict, create_grounded_edge, generate_reproduction_checklist, resource_dict, unified_graph, upsert_node
 
 
 router = APIRouter(prefix="/api")
@@ -184,7 +189,52 @@ def set_library_paper_folders(paper_id: int, payload: LibraryPaperFoldersRequest
 
 @router.get("/library/knowledge-graph")
 def library_knowledge_graph(db: Session = Depends(get_db)) -> dict[str, Any]:
-    return LibraryFolderService(db).knowledge_graph()
+    return unified_graph(db, LibraryFolderService(db).knowledge_graph())
+
+
+@router.post("/knowledge-graph/nodes")
+def create_knowledge_node(payload: KnowledgeNodeCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        node = upsert_node(db, payload.node_type, payload.label, payload.external_key, payload.metadata); db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"id": node.id, "node_type": node.node_type, "label": node.label, "external_key": node.external_key}
+
+
+@router.post("/knowledge-graph/edges")
+def create_knowledge_edge(payload: KnowledgeEdgeCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        edge = create_grounded_edge(db, **payload.model_dump()); db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"id": edge.id, "relation_type": edge.relation_type, "evidence": edge.evidence, "confidence": edge.confidence, "confirmed": edge.confirmed}
+
+
+@router.get("/papers/{paper_id}/resources")
+def list_paper_resources(paper_id: int, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    from .models import PaperResource
+    _paper_or_404(db, paper_id)
+    return [resource_dict(item) for item in db.scalars(select(PaperResource).where(PaperResource.paper_id == paper_id).order_by(PaperResource.id)).all()]
+
+
+@router.post("/papers/{paper_id}/resources")
+def create_paper_resource(paper_id: int, payload: PaperResourceCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        row = add_resource(db, _paper_or_404(db, paper_id), payload.resource_type, str(payload.url), payload.label, payload.source, payload.verified); db.commit(); db.refresh(row)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return resource_dict(row)
+
+
+@router.post("/papers/{paper_id}/reproduction-checklist")
+def build_reproduction_checklist(paper_id: int, deepwiki_job_id: int | None = None, db: Session = Depends(get_db)) -> dict[str, Any]:
+    paper = _paper_or_404(db, paper_id)
+    job = db.get(DeepWikiJob, deepwiki_job_id) if deepwiki_job_id else db.scalar(select(DeepWikiJob).where(DeepWikiJob.paper_id == paper_id).order_by(DeepWikiJob.id.desc()))
+    if deepwiki_job_id and (not job or job.paper_id != paper_id):
+        raise HTTPException(status_code=404, detail="DeepWiki 任务与论文不匹配")
+    items = generate_reproduction_checklist(db, paper, job); db.commit()
+    return {"paper_id": paper.id, "deepwiki_job_id": job.id if job else None, "items": [check_dict(item) for item in items],
+            "allowed_statuses": ["confirmed", "possibly_consistent", "missing", "unable_to_confirm"]}
 
 
 @router.get("/library/files/{file_id}/pdf")
@@ -226,6 +276,18 @@ async def generate_research_review(study_id: int, db: Session = Depends(get_db))
     try:
         study = await ResearchService(db).generate_review(study)
     except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return research_study_dict(study)
+
+
+@router.post("/research/studies/{study_id}/artifacts")
+def generate_research_artifacts(study_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    study = db.get(ResearchStudy, study_id)
+    if not study:
+        raise HTTPException(status_code=404, detail="调研记录不存在")
+    try:
+        ResearchService(db).build_artifacts(study); db.commit(); db.refresh(study)
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return research_study_dict(study)
 
@@ -272,11 +334,206 @@ def list_research_profiles(db: Session = Depends(get_db)) -> list[dict[str, Any]
     return [research_profile_dict(item) for item in db.scalars(select(ResearchProfile).order_by(ResearchProfile.created_at)).all()]
 
 
+@router.get("/domain-packs/adapters")
+def list_domain_source_adapters() -> list[dict[str, str]]:
+    return adapter_catalog()
+
+
+@router.post("/domain-packs/test-source")
+async def test_domain_source(payload: DomainSourceTestRequest) -> dict[str, Any]:
+    try:
+        return await test_source_config(payload.config)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/domain-packs")
+def list_domain_packs(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    return [domain_pack_dict(item) for item in db.scalars(select(DomainPack).order_by(DomainPack.is_builtin.desc(), DomainPack.id)).all()]
+
+
+@router.post("/domain-packs")
+def create_domain_pack_api(payload: DomainPackCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        return domain_pack_dict(create_domain_pack(db, payload.model_dump(mode="json")))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/domain-packs/import")
+def import_domain_pack(payload: DomainPackCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    return create_domain_pack_api(payload, db)
+
+
+@router.get("/domain-packs/{pack_id}")
+def read_domain_pack(pack_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    pack = db.get(DomainPack, pack_id)
+    if not pack:
+        raise HTTPException(status_code=404, detail="专业包不存在")
+    return domain_pack_dict(pack)
+
+
+@router.get("/domain-packs/{pack_id}/export")
+def export_domain_pack(pack_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    data = read_domain_pack(pack_id, db)
+    for key in ("id", "is_builtin", "created_at", "updated_at", "version"):
+        data.pop(key, None)
+    return data
+
+
+@router.put("/domain-packs/{pack_id}")
+def update_domain_pack(pack_id: int, payload: DomainPackUpdate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    pack = db.get(DomainPack, pack_id)
+    if not pack:
+        raise HTTPException(status_code=404, detail="专业包不存在")
+    try:
+        apply_domain_pack(pack, payload.model_dump(exclude_none=True, mode="json"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit(); db.refresh(pack)
+    return domain_pack_dict(pack)
+
+
+@router.delete("/domain-packs/{pack_id}")
+def delete_domain_pack(pack_id: int, db: Session = Depends(get_db)) -> dict[str, bool]:
+    pack = db.get(DomainPack, pack_id)
+    if not pack:
+        raise HTTPException(status_code=404, detail="专业包不存在")
+    if pack.is_builtin:
+        pack.enabled = False
+    else:
+        db.delete(pack)
+    db.commit()
+    return {"deleted": not pack.is_builtin, "disabled": pack.is_builtin}
+
+
+@router.post("/domain-packs/{pack_id}/search-preview")
+def preview_domain_search(pack_id: int, payload: DomainSearchPreviewRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+    pack = db.get(DomainPack, pack_id)
+    if not pack:
+        raise HTTPException(status_code=404, detail="专业包不存在")
+    return search_preview(pack, payload.query)
+
+
+@router.get("/projects")
+def list_projects(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    return [project_dict(item, detail=False) for item in db.scalars(select(ResearchProject).order_by(desc(ResearchProject.updated_at))).all()]
+
+
+@router.post("/projects")
+def create_project(payload: ResearchProjectCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    values = payload.model_dump()
+    project = ResearchProject(**{key: value for key, value in values.items() if key != "unresolved_questions"}, unresolved_questions_json=json.dumps(values["unresolved_questions"], ensure_ascii=False))
+    db.add(project); db.commit()
+    return project_dict(load_project(db, project.id))
+
+
+@router.get("/projects/{project_id}")
+def read_project(project_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    project = load_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="研究项目不存在")
+    return project_dict(project)
+
+
+@router.put("/projects/{project_id}")
+def update_project(project_id: int, payload: ResearchProjectUpdate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    project = db.get(ResearchProject, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="研究项目不存在")
+    values = payload.model_dump(exclude_unset=True)
+    if "unresolved_questions" in values:
+        project.unresolved_questions_json = json.dumps(values.pop("unresolved_questions") or [], ensure_ascii=False)
+    for key, value in values.items():
+        setattr(project, key, value)
+    db.commit()
+    return project_dict(load_project(db, project.id))
+
+
+@router.post("/projects/{project_id}/papers")
+def add_paper_to_project(project_id: int, payload: ResearchProjectPaperRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+    project, paper = db.get(ResearchProject, project_id), db.get(Paper, payload.paper_id)
+    if not project or not paper:
+        raise HTTPException(status_code=404, detail="研究项目或论文不存在")
+    try:
+        add_project_paper(db, project, paper, payload.role, payload.reading_status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit(); reindex_project(db, project_id); db.commit()
+    return project_dict(load_project(db, project_id))
+
+
+@router.put("/projects/{project_id}/papers/{paper_id}")
+def update_project_paper(project_id: int, paper_id: int, payload: ResearchProjectPaperUpdate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    link = db.scalar(select(ResearchProjectPaper).where(ResearchProjectPaper.project_id == project_id, ResearchProjectPaper.paper_id == paper_id))
+    if not link:
+        raise HTTPException(status_code=404, detail="项目论文不存在")
+    for key, value in payload.model_dump(exclude_none=True).items():
+        setattr(link, key, value)
+    db.commit()
+    return read_project(project_id, db)
+
+
+@router.delete("/projects/{project_id}/papers/{paper_id}")
+def unlink_project_paper(project_id: int, paper_id: int, db: Session = Depends(get_db)) -> dict[str, bool]:
+    link = db.scalar(select(ResearchProjectPaper).where(ResearchProjectPaper.project_id == project_id, ResearchProjectPaper.paper_id == paper_id))
+    if link:
+        db.delete(link); db.commit(); reindex_project(db, project_id); db.commit()
+    return {"unlinked": bool(link)}
+
+
+@router.post("/projects/{project_id}/notes")
+def create_project_note(project_id: int, payload: ResearchProjectNoteCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    if not db.get(ResearchProject, project_id):
+        raise HTTPException(status_code=404, detail="研究项目不存在")
+    note = ResearchProjectNote(project_id=project_id, **payload.model_dump())
+    db.add(note); db.commit(); reindex_project(db, project_id); db.commit()
+    return {"id": note.id, "title": note.title, "content": note.content, "updated_at": note.updated_at}
+
+
+@router.post("/projects/{project_id}/studies/{study_id}")
+def link_project_study(project_id: int, study_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    if not db.get(ResearchProject, project_id) or not db.get(ResearchStudy, study_id):
+        raise HTTPException(status_code=404, detail="研究项目或专题调研不存在")
+    existing = db.scalar(select(ResearchProjectStudy).where(ResearchProjectStudy.project_id == project_id, ResearchProjectStudy.study_id == study_id))
+    if not existing:
+        db.add(ResearchProjectStudy(project_id=project_id, study_id=study_id)); db.commit()
+    return read_project(project_id, db)
+
+
+@router.post("/projects/{project_id}/search")
+def search_within_project(project_id: int, payload: ResearchProjectSearchRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+    if not db.get(ResearchProject, project_id):
+        raise HTTPException(status_code=404, detail="研究项目不存在")
+    items = search_project(db, project_id, payload.query, payload.limit); db.commit()
+    return {"query": payload.query, "items": items}
+
+
+@router.post("/projects/{project_id}/chat")
+async def chat_with_project(project_id: int, payload: ResearchProjectChatRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+    if not db.get(ResearchProject, project_id):
+        raise HTTPException(status_code=404, detail="研究项目不存在")
+    sources = search_project(db, project_id, payload.message, 8)
+    if not sources:
+        answer = "当前项目中没有检索到足够证据。请先加入相关论文、笔记、专题调研或 DeepWiki。"
+        inferred = False
+    else:
+        context = "\n\n".join(f"[S{i + 1}] 类型={item['source_label']} 标题={item['title']}\n{item['excerpt']}" for i, item in enumerate(sources))
+        try:
+            answer = await LLMClient(db).chat_about_project(context, payload.message)
+            inferred = True
+        except (LLMNotConfigured, httpx.HTTPError):
+            answer = "未配置 LLM，已可靠降级为项目内检索结果。下面片段均来自当前项目，不包含外部内容。\n\n" + "\n\n".join(f"[S{i + 1} · {item['source_label']}] {item['title']}：{item['excerpt']}" for i, item in enumerate(sources))
+            inferred = False
+    save_chat(db, project_id, payload.message, answer, sources); db.commit()
+    return {"answer": answer, "sources": sources, "contains_ai_inference": inferred}
+
+
 @router.post("/research-profiles")
 def create_research_profile(payload: ResearchProfileCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
     values = payload.model_dump()
     profile = ResearchProfile(
-        name=values["name"], domain=values["domain"], description=values["description"],
+        name=values["name"], domain=values["domain"], domain_pack_id=values.get("domain_pack_id"), description=values["description"],
         positive_keywords_json=json.dumps(values["positive_keywords"], ensure_ascii=False),
         negative_keywords_json=json.dumps(values["negative_keywords"], ensure_ascii=False),
         seed_papers_json=json.dumps(values["seed_papers"], ensure_ascii=False),
@@ -427,6 +684,64 @@ async def retry_ai(paper_id: int, db: Session = Depends(get_db)) -> dict[str, An
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return paper_dict(paper)
+
+
+@router.get("/papers/{paper_id}/evidence")
+def get_paper_evidence(paper_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    paper = _paper_or_404(db, paper_id)
+    items = [evidence_dict(item) for item in paper.analysis_evidence]
+    scope = items[0]["source_scope"] if items else ("full_text" if paper.document and paper.document.full_text else "abstract")
+    return {"paper_id": paper.id, "analysis_scope": scope, "scope_label": "全文分析" if scope == "full_text" else "仅摘要分析", "items": items}
+
+
+@router.put("/papers/{paper_id}/evidence")
+def update_paper_evidence(paper_id: int, payload: PaperEvidenceUpdate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    paper = _paper_or_404(db, paper_id)
+    if payload.source_scope == "abstract" and any(item.page_number for item in payload.items):
+        raise HTTPException(status_code=400, detail="仅摘要分析不能伪造页码")
+    replace_analysis_evidence(db, paper, [item.model_dump() for item in payload.items], payload.source_scope)
+    db.commit()
+    return get_paper_evidence(paper_id, db)
+
+
+@router.get("/papers/{paper_id}/versions")
+def get_paper_versions(paper_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    timeline = work_timeline(db, _paper_or_404(db, paper_id)); db.commit()
+    return timeline
+
+
+@router.post("/papers/{paper_id}/versions/link")
+def link_paper_version(paper_id: int, payload: PaperVersionLinkRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+    source, target = _paper_or_404(db, paper_id), _paper_or_404(db, payload.target_paper_id)
+    try:
+        link_versions(db, source, target, payload.crossref_related, payload.user_confirmed); db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return work_timeline(db, source)
+
+
+@router.post("/papers/{paper_id}/versions/confirm")
+def confirm_paper_version(paper_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    paper = _paper_or_404(db, paper_id)
+    version = work_timeline(db, paper)
+    paper.work_version.confirmed = True; db.commit()
+    return work_timeline(db, paper)
+
+
+@router.post("/papers/{paper_id}/versions/split")
+def split_paper_work(paper_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    paper = _paper_or_404(db, paper_id); split_version(db, paper); db.commit()
+    return work_timeline(db, paper)
+
+
+@router.post("/papers/{paper_id}/versions/undo")
+def undo_paper_work_action(paper_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    paper = _paper_or_404(db, paper_id)
+    try:
+        undo_last_version_action(db, paper); db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return work_timeline(db, paper)
 
 
 @router.get("/papers/{paper_id}/related")

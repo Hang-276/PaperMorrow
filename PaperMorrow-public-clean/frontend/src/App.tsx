@@ -5,7 +5,7 @@ import {
   Radar, RefreshCw, Search, Settings as SettingsIcon, Sparkles, X, Moon, Sun,
   MessageCircle, Send, Plus, Bot, User,
   BarChart3, KeyRound, Link2, Pencil, Trash2, Type,
-  FlaskConical,
+  FlaskConical, Layers3, FolderKanban, ClipboardCheck,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -13,11 +13,13 @@ import { api } from './api'
 import ResearchProfiles from './ResearchProfiles'
 import LibraryPage from './LibraryPage'
 import ResearchPage from './ResearchPage'
+import DomainPacksPage from './DomainPacksPage'
+import ProjectsPage from './ProjectsPage'
 import './features.css'
 import './library.css'
 import type { AppSettings, Batch, ChatMessage, ChatSession, DeepWikiJob, LLMProfile, Paper, ResearchProfile, Tag, TokenUsageStats } from './types'
 
-type View = 'today' | 'research' | 'history' | 'learning' | 'deepwiki' | 'settings'
+type View = 'today' | 'research' | 'projects' | 'history' | 'learning' | 'deepwiki' | 'domains' | 'settings'
 
 const ReaderWorkspace = lazy(() => import('./ReaderWorkspace'))
 const WikiWorkspace = lazy(() => import('./WikiWorkspace'))
@@ -55,7 +57,7 @@ export default function App() {
   const [readerPaper, setReaderPaper] = useState<Paper | null>(null)
   const [recommendMode, setRecommendMode] = useState<'broad'|'focus'|'mixed'>('broad')
   const [selectedProfileId, setSelectedProfileId] = useState<number|''>('')
-  const [activeDomain, setActiveDomain] = useState<'ai'|'computer'|'physics'|'math'>('ai')
+  const [activeDomain, setActiveDomain] = useState<string>('ai')
 
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('papermorrow-theme', theme) }, [theme])
   useEffect(() => {
@@ -152,8 +154,8 @@ export default function App() {
   }
 
   const nav = [
-    ['today', Radar, '今日推荐'], ['research', FlaskConical, '专题调研'], ['history', History, '推荐历史'], ['learning', Library, '学习库'],
-    ['deepwiki', Code2, 'DeepWiki'], ['settings', SettingsIcon, '设置'],
+    ['today', Radar, '今日推荐'], ['research', FlaskConical, '专题调研'], ['projects', FolderKanban, '研究项目'], ['history', History, '推荐历史'], ['learning', Library, '学习库'],
+    ['deepwiki', Code2, 'DeepWiki'], ['domains', Layers3, '专业配置'], ['settings', SettingsIcon, '设置'],
   ] as const
 
   return <div className="app-shell">
@@ -170,7 +172,7 @@ export default function App() {
 
       {view === 'today' && <section className="page-content">
         <div className="hero-panel"><div><span className="section-kicker">TOMORROW'S READING, CURATED TODAY</span><h2>广度发现，也追踪你的细分问题</h2><p>规则多路召回与永久去重；LLM 同时判断方向关联、创新强度、研究价值和阅读性价比。</p></div><div className="generate-controls"><select value={recommendMode} onChange={e=>setRecommendMode(e.target.value as any)}><option value="broad">广度推荐</option><option value="mixed">聚焦 + 探索</option><option value="focus">仅聚焦方向</option></select>{recommendMode!=='broad'&&<select value={selectedProfileId} onChange={e=>{const id=Number(e.target.value)||'';setSelectedProfileId(id);const found=researchProfiles.find(item=>item.id===id);if(found)setActiveDomain(found.domain)}}><option value="">选择细分方向</option>{researchProfiles.map(profile=><option key={profile.id} value={profile.id}>{profile.name}</option>)}</select>}<select value={count} onChange={e => setCount(Number(e.target.value))}>{[3,5,8,10,15,20].map(n => <option key={n} value={n}>推荐 {n} 篇</option>)}</select><button className="primary" disabled={busy} onClick={generate}>{busy ? <RefreshCw className="spin" size={18}/> : <Sparkles size={18}/>}生成推荐</button></div></div>
-        <div className="domain-switch">{([['ai','AI'],['computer','计算机'],['physics','物理'],['math','数学']] as const).map(([id,label])=><button key={id} className={activeDomain===id?'active':''} onClick={()=>{setActiveDomain(id);setSelectedTags(tags.filter(tag=>tag.domain===id).slice(0,2).map(tag=>tag.id))}}>{label}</button>)}</div>
+        <div className="domain-switch">{([['ai','AI'],['computer','计算机'],['physics','物理'],['math','数学'],['life-sciences','生命'],['clinical-medicine','临床'],['chemistry-materials','化学材料'],['economics-finance','经济金融']] as const).map(([id,label])=><button key={id} className={activeDomain===id?'active':''} onClick={()=>{setActiveDomain(id);setSelectedTags(tags.filter(tag=>tag.domain===id).slice(0,2).map(tag=>tag.id))}}>{label}</button>)}</div>
         <div className="tag-strip"><span>{recommendMode==='broad'?'广度方向':'辅助召回'}</span><div>{tags.filter(tag=>tag.domain===activeDomain).map(tag => <button key={tag.id} className={selectedTags.includes(tag.id) ? 'selected' : ''} onClick={() => setSelectedTags(current => current.includes(tag.id) ? current.filter(id => id !== tag.id) : [...current, tag.id])}>{selectedTags.includes(tag.id) && <Check size={14}/>} {tag.name_zh}</button>)}</div></div>
         {papers.length ? <div className="paper-list">{papers.map(paper => <PaperCard key={paper.id} paper={paper} defaultLanguage={settings?.default_abstract_language || 'zh'} onLearned={toggleLearned} onNote={setNotePaper} onRelated={findRelated} onRepo={discoverRepo} onWiki={startWiki} onRetryAi={retryAI} onChat={setChatPaper} onRead={setReaderPaper}/>)}</div> : <EmptyState icon={Radar} title="今天还没有推荐" text="选择广度方向，或创建细分研究方向后生成第一批论文。"/>}
       </section>}
@@ -179,8 +181,10 @@ export default function App() {
 
       {view === 'learning' && <LibraryPage onRead={setReaderPaper} onNote={setNotePaper} onChat={setChatPaper} onRelated={findRelated} onRepo={discoverRepo} onWiki={startWiki} onOpenSettings={()=>setView('settings')} onDataChanged={load}/>} 
       {view === 'research' && <ResearchPage onDataChanged={load}/>} 
+      {view === 'projects' && <ProjectsPage/>}
 
       {view === 'deepwiki' && <DeepWikiPage jobs={jobs} onOpen={setWikiJob} onRetry={retryWiki}/>} 
+      {view === 'domains' && <DomainPacksPage/>}
       {view === 'settings' && settings && <SettingsPage settings={settings} tags={tags} researchProfiles={researchProfiles} onSaved={async () => { await load(); setMessage('设置已保存') }}/>} 
     </main>
 
@@ -219,6 +223,7 @@ function PaperCard({ paper, defaultLanguage, onLearned, onNote, onRelated, onRep
     {showDetails && <>
       <div className="abstract-toolbar"><strong>摘要</strong><div className="language-toggle"><button className={language === 'zh' ? 'active' : ''} onClick={() => setLanguage('zh')}>中文</button><button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>English</button></div></div>
       <div className={`abstract ${!abstract ? 'missing' : ''}`}>{abstract || (language === 'zh' ? '中文摘要尚未生成。配置模型后可补充，英文原摘要始终可用。' : 'No abstract available.')}</div>
+      {paper.summary&&<div className="evidence-scope"><strong>{paper.analysis_scope==='full_text'?'全文证据分析':'仅摘要分析'}</strong><span>{paper.analysis_scope==='full_text'?'结论可绑定 PDF 页码和章节':'不显示或推测页码；需要全文后才能提升证据范围'}</span>{paper.analysis_evidence?.slice(0,3).map(item=><small key={item.id}>{item.section||'Abstract'}{item.page_number?` · 第 ${item.page_number} 页`:''} · {item.conclusion_type==='ai_judgment'?'AI 判断':item.conclusion_type==='author_claim'?'作者主张':'论文事实'}</small>)}</div>}
       {paper.summary ? <div className="insight-grid"><Insight title="核心方法" text={paper.summary.method}/><Insight title="研究问题" text={paper.summary.research_problem}/><Insight title="主要创新" list={paper.summary.innovations}/><Insight title="研究价值" list={paper.summary.value}/>{paper.summary.limitations?.length ? <Insight title="值得留意" list={paper.summary.limitations}/> : null}</div> : <div className="ai-pending"><Sparkles size={17}/><span>{paper.ai_status === 'failed' ? 'AI 分析失败，可在配置模型后重试。' : '等待配置模型生成中文摘要、创新点和研究价值。'}</span><button onClick={() => onRetryAi(paper)}>生成 AI 分析</button></div>}
     </>}
     <div className="paper-actions">{compact&&<button className="expand-paper" disabled={expanding} onClick={toggleExpanded}>{expanding?<RefreshCw className="spin" size={17}/>:expanded?<ChevronUp size={17}/>:<ChevronDown size={17}/>} {expanded?'收起详情':paper.summary&&paper.abstract_zh?'展开详情':'展开并生成分析'}</button>}{paper.pdf_url&&<button className="reader-action" onClick={()=>onRead(paper)}><BookOpen size={17}/>智能阅读</button>}<button className="chat-action" onClick={() => onChat(paper)}><MessageCircle size={17}/>和 AI 讨论</button><a href={paper.primary_url} target="_blank" rel="noreferrer"><FileText size={17}/>论文页面</a>{paper.pdf_url && <a href={paper.pdf_url} target="_blank" rel="noreferrer"><ExternalLink size={17}/>PDF</a>}<button onClick={() => onRelated(paper)}><Network size={17}/>相关研究</button><button onClick={() => onNote(paper)}><NotebookPen size={17}/>学习笔记</button>{paper.repository_url ? <button onClick={() => onWiki(paper)}><Code2 size={17}/>解析代码</button> : <button onClick={() => onRepo(paper)}><Search size={17}/>查找代码</button>}</div>
@@ -244,8 +249,10 @@ function NoteModal({ paper, onClose, onSaved }: { paper: Paper; onClose: () => v
 function RepositoryResult({ result, onStart }: { result: any; onStart: () => void }) { return <div className="repo-result">{result.repository_url ? <><div className="success-mark"><CheckCircle2/></div><h3>{result.status === 'verified' ? '已发现高置信度仓库' : '发现候选仓库'}</h3><a href={result.repository_url} target="_blank" rel="noreferrer">{result.repository_url}<ExternalLink size={16}/></a><p>DeepWiki 将只进行静态分析，不会执行仓库中的代码。</p><button className="primary" onClick={onStart}><Code2 size={18}/>开始 DeepWiki 解析</button></> : <><div className="success-mark muted"><Search/></div><h3>暂未发现公开代码</h3><p>系统已检索论文元数据和 GitHub。你仍可稍后重新检测或通过 API 手动绑定仓库。</p></>}</div> }
 
 function DeepWikiPage({ jobs, onOpen, onRetry }: { jobs: DeepWikiJob[]; onOpen: (job: DeepWikiJob) => void; onRetry: (job: DeepWikiJob) => Promise<void> }) {
-  return <section className="page-content"><div className="list-toolbar"><div><span className="section-kicker">CODE INTELLIGENCE</span><h2>论文代码知识库</h2><p>完整运行原版 DeepWiki 研究图，生成 8–15 个主题页；任何页面未完成都不会标记成功。</p></div></div>{jobs.length ? <div className="job-grid">{jobs.map(job => <article className={`job-card ${job.needs_regeneration ? 'legacy-wiki-job' : ''}`} key={job.id}><div className="job-icon"><Code2/></div><div className="job-copy"><span>{job.repository_url.replace('https://github.com/', '')}</span><h3>{job.paper_title}</h3><div className="progress"><i style={{ width: `${job.progress}%` }}/></div><div className="job-status"><span className={`status-dot ${job.status}`}/>{job.message}{job.wiki_mode==='full'&&<em>完整原版</em>}{job.wiki_mode==='legacy'&&<em className="legacy">旧版简化</em>}<strong>{job.progress}%</strong></div>{job.error && <p className="job-error">{job.error}</p>}</div><div className="job-actions">{job.wiki_available && <button className="secondary" onClick={() => onOpen(job)}><BookOpen size={17}/>{job.wiki_mode==='full'?'打开完整 Wiki':'查看旧版内容'}</button>}{['completed','failed'].includes(job.status)&&<button className="secondary" onClick={()=>onRetry(job)}><RefreshCw size={16}/>重新生成</button>}</div></article>)}</div> : <EmptyState icon={Code2} title="还没有代码解析任务" text="在论文卡片中查找代码仓库，然后一键启动 DeepWiki。"/>}</section>
+  return <section className="page-content"><div className="list-toolbar"><div><span className="section-kicker">CODE INTELLIGENCE</span><h2>论文代码知识库</h2><p>完整运行原版 DeepWiki 研究图，生成 8–15 个主题页；任何页面未完成都不会标记成功。</p></div></div>{jobs.length ? <div className="job-grid">{jobs.map(job => <article className={`job-card ${job.needs_regeneration ? 'legacy-wiki-job' : ''}`} key={job.id}><div className="job-icon"><Code2/></div><div className="job-copy"><span>{job.repository_url.replace('https://github.com/', '')}</span><h3>{job.paper_title}</h3><div className="progress"><i style={{ width: `${job.progress}%` }}/></div><div className="job-status"><span className={`status-dot ${job.status}`}/>{job.message}{job.wiki_mode==='full'&&<em>完整原版</em>}{job.wiki_mode==='legacy'&&<em className="legacy">旧版简化</em>}<strong>{job.progress}%</strong></div>{job.error && <p className="job-error">{job.error}</p>}</div><div className="job-actions">{job.wiki_available && <button className="secondary" onClick={() => onOpen(job)}><BookOpen size={17}/>{job.wiki_mode==='full'?'打开完整 Wiki':'查看旧版内容'}</button>}{['completed','failed'].includes(job.status)&&<button className="secondary" onClick={()=>onRetry(job)}><RefreshCw size={16}/>重新生成</button>}<ReproductionChecklistButton job={job}/></div></article>)}</div> : <EmptyState icon={Code2} title="还没有代码解析任务" text="在论文卡片中查找代码仓库，然后一键启动 DeepWiki。"/>}</section>
 }
+
+function ReproductionChecklistButton({job}:{job:DeepWikiJob}){const [result,setResult]=useState<any|null>(null);const [busy,setBusy]=useState(false);const labels:Record<string,string>={confirmed:'已确认',possibly_consistent:'可能一致',missing:'缺失',unable_to_confirm:'无法确认'};const run=async()=>{setBusy(true);try{setResult(await api(`/api/papers/${job.paper_id}/reproduction-checklist?deepwiki_job_id=${job.id}`,{method:'POST'}))}finally{setBusy(false)}};return <>{<button className="secondary" disabled={busy} onClick={run}>{busy?<RefreshCw className="spin" size={16}/>:<ClipboardCheck size={16}/>}复现准备清单</button>}{result&&<div className="reproduction-checks">{result.items.map((item:any)=><div key={item.check_key}><strong>{item.title}</strong><span className={`check-${item.status}`}>{labels[item.status]}</span><small>{item.evidence}</small></div>)}</div>}</>}
 
 function SettingsPage({ settings, tags, researchProfiles, onSaved }: { settings: AppSettings; tags: Tag[]; researchProfiles:ResearchProfile[]; onSaved: () => Promise<void> }) {
   const [form, setForm] = useState<any>({ ...settings, github_token: '', zotero_api_key: '' })

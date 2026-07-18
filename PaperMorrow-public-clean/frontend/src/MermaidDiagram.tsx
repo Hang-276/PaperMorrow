@@ -1,6 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import mermaid from 'mermaid'
 
+function numericSvgLength(value: string | null) {
+  if (!value || value.trim().endsWith('%')) return null
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
 export default function MermaidDiagram({ source }: { source: string }) {
   const reactId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const [svg, setSvg] = useState('')
@@ -37,59 +43,30 @@ export default function MermaidDiagram({ source }: { source: string }) {
   useEffect(() => {
     const host = containerRef.current
     const svgElement = host?.querySelector('svg')
-    const graph = svgElement?.querySelector<SVGGElement>('g')
-    if (!host || !svgElement || !graph) return
-    let observer: ResizeObserver | null = null
-    let fittedWidth = 0
-    let fittedHeight = 0
-    const fitDiagram = () => {
-      if (!fittedWidth || !fittedHeight) return
-      const style = window.getComputedStyle(host)
-      const horizontalPadding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)
-      const availableWidth = Math.max(220, host.clientWidth - horizontalPadding)
-      const availableHeight = Math.max(320, window.innerHeight * .76)
-      const scale = Math.min(1, availableWidth / fittedWidth, availableHeight / fittedHeight)
-      svgElement.style.width = `${Math.floor(fittedWidth * scale)}px`
-      svgElement.style.height = `${Math.floor(fittedHeight * scale)}px`
-      svgElement.style.maxWidth = '100%'
-      svgElement.style.maxHeight = '76vh'
-    }
+    if (!host || !svgElement || svgElement.hasAttribute('viewBox')) return
+
+    // Mermaid normally emits a complete native viewBox. This fallback only
+    // considers the root SVG itself; never infer bounds from an internal group.
     const frame = window.requestAnimationFrame(() => {
       try {
-        svgElement.querySelectorAll<SVGForeignObjectElement>('foreignObject').forEach(node => {
-          node.style.overflow = 'visible'
-          const label = node.firstElementChild as HTMLElement | null
-          if (label) {
-            label.style.overflow = 'visible'
-          }
-        })
-        const bounds = graph.getBBox()
-        const padding = 28
-        const width = Math.ceil(bounds.width + padding * 2)
-        const height = Math.ceil(bounds.height + padding * 2)
-        fittedWidth = width
-        fittedHeight = height
-        svgElement.setAttribute('viewBox', `${Math.floor(bounds.x - padding)} ${Math.floor(bounds.y - padding)} ${width} ${height}`)
-        svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet')
-        svgElement.removeAttribute('height')
-        svgElement.removeAttribute('width')
-        svgElement.style.overflow = 'visible'
-        fitDiagram()
-        observer = new ResizeObserver(fitDiagram)
-        observer.observe(host)
-        window.addEventListener('resize', fitDiagram)
+        const width = numericSvgLength(svgElement.getAttribute('width'))
+        const height = numericSvgLength(svgElement.getAttribute('height'))
+        if (width && height) {
+          svgElement.setAttribute('viewBox', `0 0 ${width} ${height}`)
+          return
+        }
+        const bounds = svgElement.getBBox()
+        if (bounds.width > 0 && bounds.height > 0) {
+          svgElement.setAttribute('viewBox', `${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`)
+        }
       } catch {
-        // Mermaid output remains usable even when a browser cannot measure SVG BBox.
+        // The unmodified Mermaid SVG remains usable if root measurement is unavailable.
       }
     })
-    return () => {
-      window.cancelAnimationFrame(frame)
-      observer?.disconnect()
-      window.removeEventListener('resize', fitDiagram)
-    }
+    return () => window.cancelAnimationFrame(frame)
   }, [svg])
 
   if (error) return <div className="mermaid-error"><span>图表源码</span><pre><code>{source}</code></pre><small>{error}</small></div>
   if (!svg) return <div className="mermaid-loading">正在绘制架构图…</div>
-  return <div ref={containerRef} className="mermaid-diagram" dangerouslySetInnerHTML={{ __html: svg }}/>
+  return <div ref={containerRef} className="mermaid-diagram" data-mermaid-diagram dangerouslySetInnerHTML={{ __html: svg }}/>
 }

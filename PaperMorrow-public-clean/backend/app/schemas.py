@@ -50,7 +50,7 @@ class LibraryScanRequest(BaseModel):
 
 
 class ResearchStudyCreate(BaseModel):
-    domain: Literal["ai", "computer", "physics", "math"] = "ai"
+    domain: str = Field(default="ai", pattern=r"^[a-z0-9-]{1,80}$")
     prompt: str = Field(min_length=8, max_length=20_000)
     count: int = Field(default=12, ge=3, le=30)
 
@@ -72,7 +72,8 @@ class LibraryImportRequest(BaseModel):
 
 class ResearchProfileCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
-    domain: Literal["ai", "computer", "physics", "math"] = "ai"
+    domain: str = Field(default="ai", pattern=r"^[a-z0-9-]{1,80}$")
+    domain_pack_id: int | None = None
     description: str = Field(min_length=8, max_length=10_000)
     positive_keywords: list[str] = Field(default_factory=list, max_length=80)
     negative_keywords: list[str] = Field(default_factory=list, max_length=80)
@@ -92,7 +93,8 @@ class ResearchProfileCreate(BaseModel):
 
 class ResearchProfileUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
-    domain: Literal["ai", "computer", "physics", "math"] | None = None
+    domain: str | None = Field(default=None, pattern=r"^[a-z0-9-]{1,80}$")
+    domain_pack_id: int | None = None
     description: str | None = Field(default=None, min_length=8, max_length=10_000)
     positive_keywords: list[str] | None = Field(default=None, max_length=80)
     negative_keywords: list[str] | None = Field(default=None, max_length=80)
@@ -101,6 +103,169 @@ class ResearchProfileUpdate(BaseModel):
     recency_weight: float | None = Field(default=None, ge=0.05, le=0.7)
     exploration_ratio: float | None = Field(default=None, ge=0, le=0.6)
     enabled: bool | None = None
+
+
+class DomainMetricInput(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    value: float
+    year: int = Field(ge=1900, le=2200)
+    source_url: HttpUrl
+
+
+class DomainPackCreate(BaseModel):
+    slug: str = Field(min_length=1, max_length=80)
+    name_zh: str = Field(min_length=1, max_length=160)
+    name_en: str = Field(min_length=1, max_length=160)
+    description: str = Field(default="", max_length=20_000)
+    enabled: bool = True
+    source_adapters: list[dict[str, Any]] = Field(default_factory=list, max_length=20)
+    search_templates: list[str] = Field(default_factory=list, max_length=30)
+    keywords: list[str] = Field(default_factory=list, max_length=200)
+    exclusions: list[str] = Field(default_factory=list, max_length=200)
+    category_codes: list[str] = Field(default_factory=list, max_length=200)
+    venue_rules: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
+    paper_types: list[str] = Field(default_factory=list, max_length=100)
+    scoring_weights: dict[str, float] = Field(default_factory=dict)
+    evidence_rules: dict[str, Any] = Field(default_factory=dict)
+    analysis_prompt: str = Field(default="", max_length=50_000)
+    review_prompt: str = Field(default="", max_length=50_000)
+    citation_config: dict[str, Any] = Field(default_factory=dict)
+    impact_config: dict[str, Any] = Field(default_factory=dict)
+    metrics: list[DomainMetricInput] = Field(default_factory=list, max_length=100)
+
+
+class DomainPackUpdate(BaseModel):
+    name_zh: str | None = Field(default=None, min_length=1, max_length=160)
+    name_en: str | None = Field(default=None, min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=20_000)
+    enabled: bool | None = None
+    source_adapters: list[dict[str, Any]] | None = Field(default=None, max_length=20)
+    search_templates: list[str] | None = Field(default=None, max_length=30)
+    keywords: list[str] | None = Field(default=None, max_length=200)
+    exclusions: list[str] | None = Field(default=None, max_length=200)
+    category_codes: list[str] | None = Field(default=None, max_length=200)
+    venue_rules: list[dict[str, Any]] | None = Field(default=None, max_length=500)
+    paper_types: list[str] | None = Field(default=None, max_length=100)
+    scoring_weights: dict[str, float] | None = None
+    evidence_rules: dict[str, Any] | None = None
+    analysis_prompt: str | None = Field(default=None, max_length=50_000)
+    review_prompt: str | None = Field(default=None, max_length=50_000)
+    citation_config: dict[str, Any] | None = None
+    impact_config: dict[str, Any] | None = None
+    metrics: list[DomainMetricInput] | None = Field(default=None, max_length=100)
+
+
+class DomainSourceTestRequest(BaseModel):
+    config: dict[str, Any]
+
+
+class DomainSearchPreviewRequest(BaseModel):
+    query: str = Field(default="", max_length=5000)
+
+
+class ResearchProjectCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=500)
+    research_question: str = Field(default="", max_length=20_000)
+    research_direction: str = Field(default="", max_length=10_000)
+    domain_pack_id: int | None = None
+    research_profile_id: int | None = None
+    repository_url: str | None = Field(default=None, max_length=4000)
+    deepwiki_job_id: int | None = None
+    current_conclusion: str = Field(default="", max_length=50_000)
+    unresolved_questions: list[str] = Field(default_factory=list, max_length=200)
+    next_reading_suggestion: str = Field(default="", max_length=20_000)
+
+
+class ResearchProjectUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    research_question: str | None = Field(default=None, max_length=20_000)
+    research_direction: str | None = Field(default=None, max_length=10_000)
+    domain_pack_id: int | None = None
+    research_profile_id: int | None = None
+    repository_url: str | None = Field(default=None, max_length=4000)
+    deepwiki_job_id: int | None = None
+    current_conclusion: str | None = Field(default=None, max_length=50_000)
+    unresolved_questions: list[str] | None = Field(default=None, max_length=200)
+    next_reading_suggestion: str | None = Field(default=None, max_length=20_000)
+
+
+class ResearchProjectPaperRequest(BaseModel):
+    paper_id: int
+    role: Literal["core", "support", "conflict", "background", "to_verify"] = "to_verify"
+    reading_status: Literal["to_screen", "to_read", "reading", "read_to_organize", "completed", "shelved"] = "to_screen"
+
+
+class ResearchProjectPaperUpdate(BaseModel):
+    role: Literal["core", "support", "conflict", "background", "to_verify"] | None = None
+    reading_status: Literal["to_screen", "to_read", "reading", "read_to_organize", "completed", "shelved"] | None = None
+    queue_order: int | None = Field(default=None, ge=0)
+
+
+class ResearchProjectNoteCreate(BaseModel):
+    title: str = Field(default="项目笔记", min_length=1, max_length=300)
+    content: str = Field(default="", max_length=200_000)
+
+
+class ResearchProjectSearchRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=2000)
+    limit: int = Field(default=8, ge=1, le=20)
+
+
+class ResearchProjectChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=20_000)
+
+
+class PaperEvidenceItem(BaseModel):
+    field_name: Literal["research_problem", "method", "innovation", "experiment_conclusion", "limitation"]
+    claim: str = Field(min_length=1, max_length=20_000)
+    page_number: int | None = Field(default=None, ge=1, le=100_000)
+    section: str | None = Field(default=None, max_length=500)
+    evidence_excerpt: str = Field(default="", max_length=1000)
+    conclusion_type: Literal["paper_fact", "author_claim", "ai_judgment"] = "paper_fact"
+
+
+class PaperEvidenceUpdate(BaseModel):
+    source_scope: Literal["full_text", "abstract", "author_statement"]
+    items: list[PaperEvidenceItem] = Field(default_factory=list, max_length=200)
+
+    @field_validator("items")
+    @classmethod
+    def abstract_has_no_pages(cls, value: list[PaperEvidenceItem], info):
+        if info.data.get("source_scope") == "abstract" and any(item.page_number for item in value):
+            raise ValueError("仅摘要分析不能填写页码")
+        return value
+
+
+class PaperVersionLinkRequest(BaseModel):
+    target_paper_id: int
+    crossref_related: bool = False
+    user_confirmed: bool = False
+
+
+class KnowledgeNodeCreate(BaseModel):
+    node_type: Literal["paper", "method", "task", "dataset", "benchmark", "model", "experiment_conclusion", "limitation", "repository", "weight", "project"]
+    label: str = Field(min_length=1, max_length=1000)
+    external_key: str = Field(min_length=1, max_length=300)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class KnowledgeEdgeCreate(BaseModel):
+    source_node_id: int
+    target_node_id: int
+    relation_type: Literal["proposes", "uses", "improves", "evaluated_on", "supports", "refutes", "implements", "reproduces", "extends"]
+    source_type: str = Field(min_length=1, max_length=40)
+    source_id: str = Field(min_length=1, max_length=300)
+    evidence: str = Field(min_length=1, max_length=5000)
+    confidence: float = Field(ge=0, le=1)
+    confirmed: bool = False
+
+
+class PaperResourceCreate(BaseModel):
+    resource_type: Literal["official_repository", "third_party_reproduction", "model_weights", "dataset", "project_page"]
+    url: HttpUrl
+    label: str = Field(default="", max_length=300)
+    source: str = Field(default="user", max_length=40)
+    verified: bool = False
 
 
 class ReaderTranslateRequest(BaseModel):
