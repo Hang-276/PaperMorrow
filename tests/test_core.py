@@ -22,6 +22,11 @@ from backend.app.research_service import ResearchService
 from backend.app.recommendation import RecommendationService
 from backend.app.paper_sources import PaperCandidate
 from backend.app.recommendation import identity_hash, normalize_title
+from backend.app.recommendation_pipeline import (
+    ArxivCandidateSource, CandidateFilter, CandidateSource, DefaultSelector,
+    PermanentCandidateFilter, RecommendationContext as PipelineContext,
+    RecommendationResult, RuleRanker,
+)
 from backend.app.llm import LLMClient, provider_defaults
 from backend.app.schemas import SettingsUpdate
 from backend.app.settings_service import get_settings, update_settings
@@ -50,6 +55,51 @@ def test_title_normalization_and_identity_are_stable():
     digest = identity_hash(candidate)
     candidate.title = "A completely changed title"
     assert identity_hash(candidate) == digest
+
+
+def test_recommendation_pipeline_interfaces_and_permanent_filter():
+    class FakeArxiv:
+        async def fetch(self, categories, keywords, limit):
+            return []
+
+    source = ArxivCandidateSource(FakeArxiv())
+    assert isinstance(source, CandidateSource)
+    assert isinstance(RuleRanker(), object)
+    assert isinstance(DefaultSelector(), object)
+    assert RecommendationResult(items=[], degraded=True).degraded is True
+
+    db = SessionLocal()
+    marker = uuid.uuid4().hex[:12]
+    paper = Paper(
+        title_en=f"Permanent dedup {marker}", abstract_en="Known local paper.", authors_json="[]",
+        primary_url="https://example.com/known", arxiv_id=f"known-{marker}", identity_hash=uuid.uuid4().hex,
+    )
+    paper.library_entry = LibraryEntry(source="test")
+    db.add(paper); db.commit()
+    known = PaperCandidate(
+        title=paper.title_en, abstract="Known local paper.", authors=["A"],
+        published_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
+        arxiv_id=paper.arxiv_id, primary_url=paper.primary_url, pdf_url=None,
+    )
+    excluded = PaperCandidate(
+        title=f"Excluded {marker}", abstract="prompt-only approach", authors=["B"],
+        published_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
+        arxiv_id=f"excluded-{marker}", primary_url="https://example.com/excluded", pdf_url=None,
+    )
+    fresh = PaperCandidate(
+        title=f"Fresh {marker}", abstract="New candidate", authors=["C"],
+        published_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
+        arxiv_id=f"fresh-{marker}", primary_url="https://example.com/fresh", pdf_url=None,
+    )
+    resolver = lambda item: db.query(Paper).filter(Paper.arxiv_id == item.arxiv_id).one_or_none()
+    candidate_filter = PermanentCandidateFilter(db, resolver)
+    assert isinstance(candidate_filter, CandidateFilter)
+    context = PipelineContext(tags=[], count=5, mode="broad", settings={}, exclusions=["prompt-only"])
+    try:
+        accepted = candidate_filter.apply([known, excluded, fresh, fresh], context)
+        assert accepted == [fresh]
+    finally:
+        db.delete(paper); db.commit(); db.close()
 
 
 def test_venue_detection_requires_explicit_publication_signal_upstream():
