@@ -3,7 +3,17 @@ import base64
 import uuid
 import asyncio
 import json
+import os
+import tempfile
 from typing import ClassVar
+
+_TEST_DATA_DIR = tempfile.mkdtemp(prefix="papermorrow-tests-")
+os.environ["PAPERMORROW_DATA_DIR"] = _TEST_DATA_DIR
+os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DATA_DIR}/fixture.db"
+os.environ["LLM_API_KEY"] = ""
+os.environ["GITHUB_TOKEN"] = ""
+os.environ["SEMANTIC_SCHOLAR_API_KEY"] = ""
+os.environ["OPENALEX_API_KEY"] = ""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -1022,8 +1032,7 @@ def test_evidence_scope_and_conservative_version_actions():
             paper=db.get(Paper,paper_id)
             if paper: db.delete(paper)
         db.commit()
-        for work in db.query(PaperWork).filter(PaperWork.canonical_title.like(f"%{marker}%")).all(): db.delete(work)
-        db.commit(); db.close()
+        db.close()
 
 
 def test_structured_research_artifacts_are_traceable():
