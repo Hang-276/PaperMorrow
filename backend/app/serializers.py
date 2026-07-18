@@ -113,6 +113,8 @@ def research_profile_dict(profile: ResearchProfile) -> dict[str, Any]:
         "id": profile.id,
         "name": profile.name,
         "domain": profile.domain,
+        "domain_pack_id": profile.domain_pack_id,
+        "domain_pack": {"id": profile.domain_pack.id, "slug": profile.domain_pack.slug, "name_zh": profile.domain_pack.name_zh, "name_en": profile.domain_pack.name_en} if profile.domain_pack else None,
         "description": profile.description,
         "positive_keywords": json.loads(profile.positive_keywords_json or "[]"),
         "negative_keywords": json.loads(profile.negative_keywords_json or "[]"),

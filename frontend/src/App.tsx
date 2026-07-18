@@ -5,7 +5,7 @@ import {
   Radar, RefreshCw, Search, Settings as SettingsIcon, Sparkles, X, Moon, Sun,
   MessageCircle, Send, Plus, Bot, User,
   BarChart3, KeyRound, Link2, Pencil, Trash2, Type,
-  FlaskConical,
+  FlaskConical, Layers3,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -13,11 +13,12 @@ import { api } from './api'
 import ResearchProfiles from './ResearchProfiles'
 import LibraryPage from './LibraryPage'
 import ResearchPage from './ResearchPage'
+import DomainPacksPage from './DomainPacksPage'
 import './features.css'
 import './library.css'
 import type { AppSettings, Batch, ChatMessage, ChatSession, DeepWikiJob, LLMProfile, Paper, ResearchProfile, Tag, TokenUsageStats } from './types'
 
-type View = 'today' | 'research' | 'history' | 'learning' | 'deepwiki' | 'settings'
+type View = 'today' | 'research' | 'history' | 'learning' | 'deepwiki' | 'domains' | 'settings'
 
 const ReaderWorkspace = lazy(() => import('./ReaderWorkspace'))
 const WikiWorkspace = lazy(() => import('./WikiWorkspace'))
@@ -55,7 +56,7 @@ export default function App() {
   const [readerPaper, setReaderPaper] = useState<Paper | null>(null)
   const [recommendMode, setRecommendMode] = useState<'broad'|'focus'|'mixed'>('broad')
   const [selectedProfileId, setSelectedProfileId] = useState<number|''>('')
-  const [activeDomain, setActiveDomain] = useState<'ai'|'computer'|'physics'|'math'>('ai')
+  const [activeDomain, setActiveDomain] = useState<string>('ai')
 
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('papermorrow-theme', theme) }, [theme])
   useEffect(() => {
@@ -153,7 +154,7 @@ export default function App() {
 
   const nav = [
     ['today', Radar, '今日推荐'], ['research', FlaskConical, '专题调研'], ['history', History, '推荐历史'], ['learning', Library, '学习库'],
-    ['deepwiki', Code2, 'DeepWiki'], ['settings', SettingsIcon, '设置'],
+    ['deepwiki', Code2, 'DeepWiki'], ['domains', Layers3, '专业配置'], ['settings', SettingsIcon, '设置'],
   ] as const
 
   return <div className="app-shell">
@@ -170,7 +171,7 @@ export default function App() {
 
       {view === 'today' && <section className="page-content">
         <div className="hero-panel"><div><span className="section-kicker">TOMORROW'S READING, CURATED TODAY</span><h2>广度发现，也追踪你的细分问题</h2><p>规则多路召回与永久去重；LLM 同时判断方向关联、创新强度、研究价值和阅读性价比。</p></div><div className="generate-controls"><select value={recommendMode} onChange={e=>setRecommendMode(e.target.value as any)}><option value="broad">广度推荐</option><option value="mixed">聚焦 + 探索</option><option value="focus">仅聚焦方向</option></select>{recommendMode!=='broad'&&<select value={selectedProfileId} onChange={e=>{const id=Number(e.target.value)||'';setSelectedProfileId(id);const found=researchProfiles.find(item=>item.id===id);if(found)setActiveDomain(found.domain)}}><option value="">选择细分方向</option>{researchProfiles.map(profile=><option key={profile.id} value={profile.id}>{profile.name}</option>)}</select>}<select value={count} onChange={e => setCount(Number(e.target.value))}>{[3,5,8,10,15,20].map(n => <option key={n} value={n}>推荐 {n} 篇</option>)}</select><button className="primary" disabled={busy} onClick={generate}>{busy ? <RefreshCw className="spin" size={18}/> : <Sparkles size={18}/>}生成推荐</button></div></div>
-        <div className="domain-switch">{([['ai','AI'],['computer','计算机'],['physics','物理'],['math','数学']] as const).map(([id,label])=><button key={id} className={activeDomain===id?'active':''} onClick={()=>{setActiveDomain(id);setSelectedTags(tags.filter(tag=>tag.domain===id).slice(0,2).map(tag=>tag.id))}}>{label}</button>)}</div>
+        <div className="domain-switch">{([['ai','AI'],['computer','计算机'],['physics','物理'],['math','数学'],['life-sciences','生命'],['clinical-medicine','临床'],['chemistry-materials','化学材料'],['economics-finance','经济金融']] as const).map(([id,label])=><button key={id} className={activeDomain===id?'active':''} onClick={()=>{setActiveDomain(id);setSelectedTags(tags.filter(tag=>tag.domain===id).slice(0,2).map(tag=>tag.id))}}>{label}</button>)}</div>
         <div className="tag-strip"><span>{recommendMode==='broad'?'广度方向':'辅助召回'}</span><div>{tags.filter(tag=>tag.domain===activeDomain).map(tag => <button key={tag.id} className={selectedTags.includes(tag.id) ? 'selected' : ''} onClick={() => setSelectedTags(current => current.includes(tag.id) ? current.filter(id => id !== tag.id) : [...current, tag.id])}>{selectedTags.includes(tag.id) && <Check size={14}/>} {tag.name_zh}</button>)}</div></div>
         {papers.length ? <div className="paper-list">{papers.map(paper => <PaperCard key={paper.id} paper={paper} defaultLanguage={settings?.default_abstract_language || 'zh'} onLearned={toggleLearned} onNote={setNotePaper} onRelated={findRelated} onRepo={discoverRepo} onWiki={startWiki} onRetryAi={retryAI} onChat={setChatPaper} onRead={setReaderPaper}/>)}</div> : <EmptyState icon={Radar} title="今天还没有推荐" text="选择广度方向，或创建细分研究方向后生成第一批论文。"/>}
       </section>}
@@ -181,6 +182,7 @@ export default function App() {
       {view === 'research' && <ResearchPage onDataChanged={load}/>} 
 
       {view === 'deepwiki' && <DeepWikiPage jobs={jobs} onOpen={setWikiJob} onRetry={retryWiki}/>} 
+      {view === 'domains' && <DomainPacksPage/>}
       {view === 'settings' && settings && <SettingsPage settings={settings} tags={tags} researchProfiles={researchProfiles} onSaved={async () => { await load(); setMessage('设置已保存') }}/>} 
     </main>
 

@@ -13,17 +13,19 @@ from sqlalchemy import desc, or_, select
 from sqlalchemy.orm import Session
 
 from .deepwiki_service import run_deepwiki_job, validate_repository_url, wiki_is_complete
+from .domain_pack_service import adapter_catalog, apply_domain_pack, create_domain_pack, domain_pack_dict, search_preview
+from .domain_sources import test_source_config
 from .library_service import LibraryService, normalize_library_tag
 from .library_folder_service import LibraryFolderService
 from .llm import LLMClient
-from .models import ChatMessage, ChatSession, DeepWikiJob, LibraryEntry, LibraryTag, LLMProfile, Paper, PaperNote, PaperStudyState, Recommendation, RecommendationBatch, ResearchProfile, ResearchStudy, Tag, ZoteroLink
+from .models import ChatMessage, ChatSession, DeepWikiJob, DomainPack, LibraryEntry, LibraryTag, LLMProfile, Paper, PaperNote, PaperStudyState, Recommendation, RecommendationBatch, ResearchProfile, ResearchStudy, Tag, ZoteroLink
 from .paper_sources import SemanticScholarSource
 from .paper_document_service import get_or_extract_paper_text
 from .recommendation import RecommendationService
 from .repository_service import RepositoryService
 from .scheduler import sync_scheduler
 from .reader_service import cached_pdf_path, reader_figure_path, save_reader_figure
-from .schemas import ChatSessionCreate, GenerateRequest, LibraryFolderCreate, LibraryImportRequest, LibraryPaperFoldersRequest, LibraryPaperTagsRequest, LibraryScanRequest, LibraryTagCreate, LibraryTagUpdate, LLMProfileCreate, LLMProfileUpdate, NoteRequest, PaperChatRequest, ReaderFigureRequest, ReaderTranslateRequest, RepositoryBindRequest, ResearchProfileCreate, ResearchProfileUpdate, ResearchStudyCreate, SettingsUpdate, StudyStateRequest
+from .schemas import ChatSessionCreate, DomainPackCreate, DomainPackUpdate, DomainSearchPreviewRequest, DomainSourceTestRequest, GenerateRequest, LibraryFolderCreate, LibraryImportRequest, LibraryPaperFoldersRequest, LibraryPaperTagsRequest, LibraryScanRequest, LibraryTagCreate, LibraryTagUpdate, LLMProfileCreate, LLMProfileUpdate, NoteRequest, PaperChatRequest, ReaderFigureRequest, ReaderTranslateRequest, RepositoryBindRequest, ResearchProfileCreate, ResearchProfileUpdate, ResearchStudyCreate, SettingsUpdate, StudyStateRequest
 from .serializers import batch_dict, job_dict, library_tag_dict, paper_dict, research_profile_dict, tag_dict
 from .settings_service import delete_llm_profile_key, get_active_llm_profile, get_settings, list_llm_profiles, llm_profile_dict, save_llm_profile_key, save_secrets, update_settings
 from .usage_service import token_usage_stats
@@ -272,11 +274,92 @@ def list_research_profiles(db: Session = Depends(get_db)) -> list[dict[str, Any]
     return [research_profile_dict(item) for item in db.scalars(select(ResearchProfile).order_by(ResearchProfile.created_at)).all()]
 
 
+@router.get("/domain-packs/adapters")
+def list_domain_source_adapters() -> list[dict[str, str]]:
+    return adapter_catalog()
+
+
+@router.post("/domain-packs/test-source")
+async def test_domain_source(payload: DomainSourceTestRequest) -> dict[str, Any]:
+    try:
+        return await test_source_config(payload.config)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/domain-packs")
+def list_domain_packs(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    return [domain_pack_dict(item) for item in db.scalars(select(DomainPack).order_by(DomainPack.is_builtin.desc(), DomainPack.id)).all()]
+
+
+@router.post("/domain-packs")
+def create_domain_pack_api(payload: DomainPackCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        return domain_pack_dict(create_domain_pack(db, payload.model_dump(mode="json")))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/domain-packs/import")
+def import_domain_pack(payload: DomainPackCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    return create_domain_pack_api(payload, db)
+
+
+@router.get("/domain-packs/{pack_id}")
+def read_domain_pack(pack_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    pack = db.get(DomainPack, pack_id)
+    if not pack:
+        raise HTTPException(status_code=404, detail="专业包不存在")
+    return domain_pack_dict(pack)
+
+
+@router.get("/domain-packs/{pack_id}/export")
+def export_domain_pack(pack_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    data = read_domain_pack(pack_id, db)
+    for key in ("id", "is_builtin", "created_at", "updated_at", "version"):
+        data.pop(key, None)
+    return data
+
+
+@router.put("/domain-packs/{pack_id}")
+def update_domain_pack(pack_id: int, payload: DomainPackUpdate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    pack = db.get(DomainPack, pack_id)
+    if not pack:
+        raise HTTPException(status_code=404, detail="专业包不存在")
+    try:
+        apply_domain_pack(pack, payload.model_dump(exclude_none=True, mode="json"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit(); db.refresh(pack)
+    return domain_pack_dict(pack)
+
+
+@router.delete("/domain-packs/{pack_id}")
+def delete_domain_pack(pack_id: int, db: Session = Depends(get_db)) -> dict[str, bool]:
+    pack = db.get(DomainPack, pack_id)
+    if not pack:
+        raise HTTPException(status_code=404, detail="专业包不存在")
+    if pack.is_builtin:
+        pack.enabled = False
+    else:
+        db.delete(pack)
+    db.commit()
+    return {"deleted": not pack.is_builtin, "disabled": pack.is_builtin}
+
+
+@router.post("/domain-packs/{pack_id}/search-preview")
+def preview_domain_search(pack_id: int, payload: DomainSearchPreviewRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+    pack = db.get(DomainPack, pack_id)
+    if not pack:
+        raise HTTPException(status_code=404, detail="专业包不存在")
+    return search_preview(pack, payload.query)
+
+
 @router.post("/research-profiles")
 def create_research_profile(payload: ResearchProfileCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
     values = payload.model_dump()
     profile = ResearchProfile(
-        name=values["name"], domain=values["domain"], description=values["description"],
+        name=values["name"], domain=values["domain"], domain_pack_id=values.get("domain_pack_id"), description=values["description"],
         positive_keywords_json=json.dumps(values["positive_keywords"], ensure_ascii=False),
         negative_keywords_json=json.dumps(values["negative_keywords"], ensure_ascii=False),
         seed_papers_json=json.dumps(values["seed_papers"], ensure_ascii=False),

@@ -118,10 +118,56 @@ class Recommendation(Base):
     match: Mapped["RecommendationMatch | None"] = relationship(back_populates="recommendation", uselist=False, cascade="all, delete-orphan")
 
 
+class DomainPack(Base):
+    __tablename__ = "domain_packs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    name_zh: Mapped[str] = mapped_column(String(160))
+    name_en: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(Text, default="")
+    is_builtin: Mapped[bool] = mapped_column(Boolean, default=False)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    source_adapters_json: Mapped[str] = mapped_column(Text, default="[]")
+    search_templates_json: Mapped[str] = mapped_column(Text, default="[]")
+    keywords_json: Mapped[str] = mapped_column(Text, default="[]")
+    exclusions_json: Mapped[str] = mapped_column(Text, default="[]")
+    category_codes_json: Mapped[str] = mapped_column(Text, default="[]")
+    venue_rules_json: Mapped[str] = mapped_column(Text, default="[]")
+    paper_types_json: Mapped[str] = mapped_column(Text, default="[]")
+    scoring_weights_json: Mapped[str] = mapped_column(Text, default="{}")
+    evidence_rules_json: Mapped[str] = mapped_column(Text, default="{}")
+    analysis_prompt: Mapped[str] = mapped_column(Text, default="")
+    review_prompt: Mapped[str] = mapped_column(Text, default="")
+    citation_config_json: Mapped[str] = mapped_column(Text, default="{}")
+    impact_config_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    metrics: Mapped[list["DomainMetric"]] = relationship(back_populates="domain_pack", cascade="all, delete-orphan")
+    research_profiles: Mapped[list["ResearchProfile"]] = relationship(back_populates="domain_pack")
+
+
+class DomainMetric(Base):
+    __tablename__ = "domain_metrics"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    domain_pack_id: Mapped[int] = mapped_column(ForeignKey("domain_packs.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    value: Mapped[float] = mapped_column(Float)
+    year: Mapped[int] = mapped_column(Integer)
+    source_url: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    domain_pack: Mapped[DomainPack] = relationship(back_populates="metrics")
+
+
 class ResearchProfile(Base):
     __tablename__ = "research_profiles"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    domain_pack_id: Mapped[int | None] = mapped_column(ForeignKey("domain_packs.id", ondelete="SET NULL"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(160))
     domain: Mapped[str] = mapped_column(String(32), default="ai", index=True)
     description: Mapped[str] = mapped_column(Text)
@@ -134,6 +180,8 @@ class ResearchProfile(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    domain_pack: Mapped["DomainPack | None"] = relationship(back_populates="research_profiles")
 
 
 class RecommendationContext(Base):

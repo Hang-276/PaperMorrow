@@ -50,7 +50,7 @@ class LibraryScanRequest(BaseModel):
 
 
 class ResearchStudyCreate(BaseModel):
-    domain: Literal["ai", "computer", "physics", "math"] = "ai"
+    domain: str = Field(default="ai", pattern=r"^[a-z0-9-]{1,80}$")
     prompt: str = Field(min_length=8, max_length=20_000)
     count: int = Field(default=12, ge=3, le=30)
 
@@ -72,7 +72,8 @@ class LibraryImportRequest(BaseModel):
 
 class ResearchProfileCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
-    domain: Literal["ai", "computer", "physics", "math"] = "ai"
+    domain: str = Field(default="ai", pattern=r"^[a-z0-9-]{1,80}$")
+    domain_pack_id: int | None = None
     description: str = Field(min_length=8, max_length=10_000)
     positive_keywords: list[str] = Field(default_factory=list, max_length=80)
     negative_keywords: list[str] = Field(default_factory=list, max_length=80)
@@ -92,7 +93,8 @@ class ResearchProfileCreate(BaseModel):
 
 class ResearchProfileUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
-    domain: Literal["ai", "computer", "physics", "math"] | None = None
+    domain: str | None = Field(default=None, pattern=r"^[a-z0-9-]{1,80}$")
+    domain_pack_id: int | None = None
     description: str | None = Field(default=None, min_length=8, max_length=10_000)
     positive_keywords: list[str] | None = Field(default=None, max_length=80)
     negative_keywords: list[str] | None = Field(default=None, max_length=80)
@@ -101,6 +103,64 @@ class ResearchProfileUpdate(BaseModel):
     recency_weight: float | None = Field(default=None, ge=0.05, le=0.7)
     exploration_ratio: float | None = Field(default=None, ge=0, le=0.6)
     enabled: bool | None = None
+
+
+class DomainMetricInput(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    value: float
+    year: int = Field(ge=1900, le=2200)
+    source_url: HttpUrl
+
+
+class DomainPackCreate(BaseModel):
+    slug: str = Field(min_length=1, max_length=80)
+    name_zh: str = Field(min_length=1, max_length=160)
+    name_en: str = Field(min_length=1, max_length=160)
+    description: str = Field(default="", max_length=20_000)
+    enabled: bool = True
+    source_adapters: list[dict[str, Any]] = Field(default_factory=list, max_length=20)
+    search_templates: list[str] = Field(default_factory=list, max_length=30)
+    keywords: list[str] = Field(default_factory=list, max_length=200)
+    exclusions: list[str] = Field(default_factory=list, max_length=200)
+    category_codes: list[str] = Field(default_factory=list, max_length=200)
+    venue_rules: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
+    paper_types: list[str] = Field(default_factory=list, max_length=100)
+    scoring_weights: dict[str, float] = Field(default_factory=dict)
+    evidence_rules: dict[str, Any] = Field(default_factory=dict)
+    analysis_prompt: str = Field(default="", max_length=50_000)
+    review_prompt: str = Field(default="", max_length=50_000)
+    citation_config: dict[str, Any] = Field(default_factory=dict)
+    impact_config: dict[str, Any] = Field(default_factory=dict)
+    metrics: list[DomainMetricInput] = Field(default_factory=list, max_length=100)
+
+
+class DomainPackUpdate(BaseModel):
+    name_zh: str | None = Field(default=None, min_length=1, max_length=160)
+    name_en: str | None = Field(default=None, min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=20_000)
+    enabled: bool | None = None
+    source_adapters: list[dict[str, Any]] | None = Field(default=None, max_length=20)
+    search_templates: list[str] | None = Field(default=None, max_length=30)
+    keywords: list[str] | None = Field(default=None, max_length=200)
+    exclusions: list[str] | None = Field(default=None, max_length=200)
+    category_codes: list[str] | None = Field(default=None, max_length=200)
+    venue_rules: list[dict[str, Any]] | None = Field(default=None, max_length=500)
+    paper_types: list[str] | None = Field(default=None, max_length=100)
+    scoring_weights: dict[str, float] | None = None
+    evidence_rules: dict[str, Any] | None = None
+    analysis_prompt: str | None = Field(default=None, max_length=50_000)
+    review_prompt: str | None = Field(default=None, max_length=50_000)
+    citation_config: dict[str, Any] | None = None
+    impact_config: dict[str, Any] | None = None
+    metrics: list[DomainMetricInput] | None = Field(default=None, max_length=100)
+
+
+class DomainSourceTestRequest(BaseModel):
+    config: dict[str, Any]
+
+
+class DomainSearchPreviewRequest(BaseModel):
+    query: str = Field(default="", max_length=5000)
 
 
 class ReaderTranslateRequest(BaseModel):

@@ -16,7 +16,7 @@ from backend.app.catalog import detect_venue
 from backend.app.deepwiki_service import _fallback_page, _generate_llm_wiki, _generate_original_wiki, _generate_wiki, _valid_page_content, _write_wiki, validate_repository_url, wiki_is_full_deepwiki
 from backend.app.main import app
 from backend.app.database import SessionLocal
-from backend.app.models import ChatSession, LibraryEntry, LibraryFolder, LibraryTag, LocalPaperFile, Paper, PaperNote, RecommendationAssessment, RecommendationBatch, ResearchProfile, ResearchStudy, Tag, TokenUsage
+from backend.app.models import ChatSession, DomainPack, LibraryEntry, LibraryFolder, LibraryTag, LocalPaperFile, Paper, PaperNote, RecommendationAssessment, RecommendationBatch, ResearchProfile, ResearchStudy, Tag, TokenUsage
 from backend.app.library_folder_service import LibraryFolderService
 from backend.app.research_service import ResearchService
 from backend.app.recommendation import RecommendationService
@@ -32,6 +32,9 @@ from backend.app.schemas import SettingsUpdate
 from backend.app.settings_service import get_settings, update_settings
 from backend.app.usage_service import token_usage_stats
 from backend.app.zotero_service import ZoteroService
+from backend.app.domain_sources import test_source_config as probe_domain_source
+from backend.app.migrations import run_migrations
+from backend.app.database import engine
 from backend.prompts.prompt_template import apply_prompt_template
 from backend.model.notepad import Notepad
 from backend.model.todo_list import TodoList
@@ -186,6 +189,47 @@ def test_api_defaults_and_chat_contract():
         }
         chat = client.post("/api/papers/999/chat", json={"message": "hello"})
         assert chat.status_code == 404
+
+
+def test_domain_pack_builtins_custom_wizard_and_migration_are_incremental():
+    assert run_migrations(engine) == []
+    custom_id = None
+    slug = f"test-domain-{uuid.uuid4().hex[:8]}"
+    with TestClient(app) as client:
+        packs = client.get("/api/domain-packs").json()
+        assert {"ai","computer","physics","math","life-sciences","clinical-medicine","chemistry-materials","economics-finance"}.issubset({item["slug"] for item in packs})
+        clinical = next(item for item in packs if item["slug"] == "clinical-medicine")
+        assert clinical["evidence_rules"]["preprint_risk"] is True
+        assert clinical["evidence_rules"]["impact_factor_is_not_sufficient"] is True
+        created = client.post("/api/domain-packs", json={
+            "slug":slug,"name_zh":"测试专业","name_en":"Test Domain","description":"用于固定契约测试",
+            "source_adapters":[{"adapter":"crossref","enabled":True}],"keywords":["contract testing"],
+            "venue_rules":[{"name":"Verified Venue","aliases":["VV"],"paper_types":["journal_article"],"level":"top"}],
+            "metrics":[{"name":"可核验指标","value":88.5,"year":2025,"source_url":"https://example.com/metric"}],
+        })
+        assert created.status_code == 200
+        custom_id = created.json()["id"]
+        preview = client.post(f"/api/domain-packs/{custom_id}/search-preview", json={"query":"evidence"})
+        assert preview.status_code == 200 and "evidence" in preview.json()["query"]
+        exported = client.get(f"/api/domain-packs/{custom_id}/export").json()
+        assert "id" not in exported and exported["metrics"][0]["source_url"] == "https://example.com/metric"
+        assert client.put(f"/api/domain-packs/{custom_id}", json={"enabled":False}).json()["enabled"] is False
+        assert client.delete(f"/api/domain-packs/{custom_id}").status_code == 200
+        custom_id = None
+    if custom_id:
+        db = SessionLocal(); pack = db.get(DomainPack, custom_id)
+        if pack: db.delete(pack); db.commit()
+        db.close()
+
+
+def test_domain_source_adapter_uses_mock_contract_not_live_network():
+    import httpx
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"message":{"items":[]}}))
+    async def run():
+        async with httpx.AsyncClient(transport=transport) as client:
+            return await probe_domain_source({"adapter":"crossref","enabled":True}, client)
+    result = asyncio.run(run())
+    assert result["ok"] is True and result["adapter"] == "crossref"
 
 
 def test_research_profile_crud_and_weight_validation():

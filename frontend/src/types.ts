@@ -4,7 +4,7 @@ export type Tag = {
   name_zh: string
   name_en: string
   query: string
-  domain: 'ai' | 'computer' | 'physics' | 'math'
+  domain: string
 }
 
 export type LibraryTag = {
@@ -136,7 +136,9 @@ export type Batch = {
 export type ResearchProfile = {
   id: number
   name: string
-  domain: 'ai' | 'computer' | 'physics' | 'math'
+  domain: string
+  domain_pack_id?: number | null
+  domain_pack?: Pick<DomainPack,'id'|'slug'|'name_zh'|'name_en'> | null
   description: string
   positive_keywords: string[]
   negative_keywords: string[]
@@ -147,6 +149,13 @@ export type ResearchProfile = {
   enabled: boolean
   created_at: string
   updated_at: string
+}
+
+export type DomainPack = {
+  id:number; slug:string; name_zh:string; name_en:string; description:string; is_builtin:boolean; version:number; enabled:boolean
+  source_adapters:{adapter:string;enabled?:boolean;[key:string]:unknown}[]; search_templates:string[]; keywords:string[]; exclusions:string[]; category_codes:string[]
+  venue_rules:any[]; paper_types:string[]; scoring_weights:Record<string,number>; evidence_rules:Record<string,any>; analysis_prompt:string; review_prompt:string
+  citation_config:Record<string,any>; impact_config:Record<string,any>; metrics:{id?:number;name:string;value:number;year:number;source_url:string}[]; created_at:string; updated_at:string
 }
 
 export type DeepWikiJob = {
