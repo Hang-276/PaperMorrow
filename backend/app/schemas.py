@@ -163,6 +163,58 @@ class DomainSearchPreviewRequest(BaseModel):
     query: str = Field(default="", max_length=5000)
 
 
+class ResearchProjectCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=500)
+    research_question: str = Field(default="", max_length=20_000)
+    research_direction: str = Field(default="", max_length=10_000)
+    domain_pack_id: int | None = None
+    research_profile_id: int | None = None
+    repository_url: str | None = Field(default=None, max_length=4000)
+    deepwiki_job_id: int | None = None
+    current_conclusion: str = Field(default="", max_length=50_000)
+    unresolved_questions: list[str] = Field(default_factory=list, max_length=200)
+    next_reading_suggestion: str = Field(default="", max_length=20_000)
+
+
+class ResearchProjectUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    research_question: str | None = Field(default=None, max_length=20_000)
+    research_direction: str | None = Field(default=None, max_length=10_000)
+    domain_pack_id: int | None = None
+    research_profile_id: int | None = None
+    repository_url: str | None = Field(default=None, max_length=4000)
+    deepwiki_job_id: int | None = None
+    current_conclusion: str | None = Field(default=None, max_length=50_000)
+    unresolved_questions: list[str] | None = Field(default=None, max_length=200)
+    next_reading_suggestion: str | None = Field(default=None, max_length=20_000)
+
+
+class ResearchProjectPaperRequest(BaseModel):
+    paper_id: int
+    role: Literal["core", "support", "conflict", "background", "to_verify"] = "to_verify"
+    reading_status: Literal["to_screen", "to_read", "reading", "read_to_organize", "completed", "shelved"] = "to_screen"
+
+
+class ResearchProjectPaperUpdate(BaseModel):
+    role: Literal["core", "support", "conflict", "background", "to_verify"] | None = None
+    reading_status: Literal["to_screen", "to_read", "reading", "read_to_organize", "completed", "shelved"] | None = None
+    queue_order: int | None = Field(default=None, ge=0)
+
+
+class ResearchProjectNoteCreate(BaseModel):
+    title: str = Field(default="项目笔记", min_length=1, max_length=300)
+    content: str = Field(default="", max_length=200_000)
+
+
+class ResearchProjectSearchRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=2000)
+    limit: int = Field(default=8, ge=1, le=20)
+
+
+class ResearchProjectChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=20_000)
+
+
 class ReaderTranslateRequest(BaseModel):
     text: str = Field(min_length=1, max_length=20_000)
     page: int | None = Field(default=None, ge=1, le=1000)

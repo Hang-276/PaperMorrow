@@ -5,7 +5,7 @@ import {
   Radar, RefreshCw, Search, Settings as SettingsIcon, Sparkles, X, Moon, Sun,
   MessageCircle, Send, Plus, Bot, User,
   BarChart3, KeyRound, Link2, Pencil, Trash2, Type,
-  FlaskConical, Layers3,
+  FlaskConical, Layers3, FolderKanban,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -14,11 +14,12 @@ import ResearchProfiles from './ResearchProfiles'
 import LibraryPage from './LibraryPage'
 import ResearchPage from './ResearchPage'
 import DomainPacksPage from './DomainPacksPage'
+import ProjectsPage from './ProjectsPage'
 import './features.css'
 import './library.css'
 import type { AppSettings, Batch, ChatMessage, ChatSession, DeepWikiJob, LLMProfile, Paper, ResearchProfile, Tag, TokenUsageStats } from './types'
 
-type View = 'today' | 'research' | 'history' | 'learning' | 'deepwiki' | 'domains' | 'settings'
+type View = 'today' | 'research' | 'projects' | 'history' | 'learning' | 'deepwiki' | 'domains' | 'settings'
 
 const ReaderWorkspace = lazy(() => import('./ReaderWorkspace'))
 const WikiWorkspace = lazy(() => import('./WikiWorkspace'))
@@ -153,7 +154,7 @@ export default function App() {
   }
 
   const nav = [
-    ['today', Radar, '今日推荐'], ['research', FlaskConical, '专题调研'], ['history', History, '推荐历史'], ['learning', Library, '学习库'],
+    ['today', Radar, '今日推荐'], ['research', FlaskConical, '专题调研'], ['projects', FolderKanban, '研究项目'], ['history', History, '推荐历史'], ['learning', Library, '学习库'],
     ['deepwiki', Code2, 'DeepWiki'], ['domains', Layers3, '专业配置'], ['settings', SettingsIcon, '设置'],
   ] as const
 
@@ -180,6 +181,7 @@ export default function App() {
 
       {view === 'learning' && <LibraryPage onRead={setReaderPaper} onNote={setNotePaper} onChat={setChatPaper} onRelated={findRelated} onRepo={discoverRepo} onWiki={startWiki} onOpenSettings={()=>setView('settings')} onDataChanged={load}/>} 
       {view === 'research' && <ResearchPage onDataChanged={load}/>} 
+      {view === 'projects' && <ProjectsPage/>}
 
       {view === 'deepwiki' && <DeepWikiPage jobs={jobs} onOpen={setWikiJob} onRetry={retryWiki}/>} 
       {view === 'domains' && <DomainPacksPage/>}

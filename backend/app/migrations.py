@@ -70,7 +70,63 @@ def _migration_001_domain_packs(connection) -> None:
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_research_profiles_domain_pack_id ON research_profiles(domain_pack_id)"))
 
 
-MIGRATIONS = [("001_domain_packs", _migration_001_domain_packs)]
+def _migration_002_research_projects(connection) -> None:
+    connection.execute(text("""
+        CREATE TABLE IF NOT EXISTS research_projects (
+            id INTEGER PRIMARY KEY, title VARCHAR(500) NOT NULL,
+            research_question TEXT NOT NULL DEFAULT '', research_direction TEXT NOT NULL DEFAULT '',
+            domain_pack_id INTEGER REFERENCES domain_packs(id) ON DELETE SET NULL,
+            research_profile_id INTEGER REFERENCES research_profiles(id) ON DELETE SET NULL,
+            repository_url TEXT, deepwiki_job_id INTEGER REFERENCES deepwiki_jobs(id) ON DELETE SET NULL,
+            current_conclusion TEXT NOT NULL DEFAULT '', unresolved_questions_json TEXT NOT NULL DEFAULT '[]',
+            next_reading_suggestion TEXT NOT NULL DEFAULT '', created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL
+        )
+    """))
+    connection.execute(text("""
+        CREATE TABLE IF NOT EXISTS research_project_papers (
+            id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+            paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE, role VARCHAR(24) NOT NULL DEFAULT 'to_verify',
+            reading_status VARCHAR(32) NOT NULL DEFAULT 'to_screen', queue_order INTEGER NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, UNIQUE(project_id, paper_id)
+        )
+    """))
+    connection.execute(text("""
+        CREATE TABLE IF NOT EXISTS research_project_notes (
+            id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+            title VARCHAR(300) NOT NULL DEFAULT '项目笔记', content TEXT NOT NULL DEFAULT '',
+            created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL
+        )
+    """))
+    connection.execute(text("""
+        CREATE TABLE IF NOT EXISTS research_project_studies (
+            id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+            study_id INTEGER NOT NULL REFERENCES research_studies(id) ON DELETE CASCADE, UNIQUE(project_id, study_id)
+        )
+    """))
+    connection.execute(text("""
+        CREATE TABLE IF NOT EXISTS project_chat_messages (
+            id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+            role VARCHAR(16) NOT NULL, content TEXT NOT NULL, sources_json TEXT NOT NULL DEFAULT '[]', created_at DATETIME NOT NULL
+        )
+    """))
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS ix_research_project_papers_project ON research_project_papers(project_id)",
+        "CREATE INDEX IF NOT EXISTS ix_research_project_notes_project ON research_project_notes(project_id)",
+        "CREATE INDEX IF NOT EXISTS ix_project_chat_messages_project ON project_chat_messages(project_id)",
+    ):
+        connection.execute(text(statement))
+    connection.execute(text("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS project_search_fts USING fts5(
+            project_id UNINDEXED, source_type UNINDEXED, source_id UNINDEXED, title, content,
+            tokenize='unicode61 remove_diacritics 2'
+        )
+    """))
+
+
+MIGRATIONS = [
+    ("001_domain_packs", _migration_001_domain_packs),
+    ("002_research_projects", _migration_002_research_projects),
+]
 
 
 def run_migrations(engine: Engine) -> list[str]:

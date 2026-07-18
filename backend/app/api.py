@@ -17,21 +17,22 @@ from .domain_pack_service import adapter_catalog, apply_domain_pack, create_doma
 from .domain_sources import test_source_config
 from .library_service import LibraryService, normalize_library_tag
 from .library_folder_service import LibraryFolderService
-from .llm import LLMClient
-from .models import ChatMessage, ChatSession, DeepWikiJob, DomainPack, LibraryEntry, LibraryTag, LLMProfile, Paper, PaperNote, PaperStudyState, Recommendation, RecommendationBatch, ResearchProfile, ResearchStudy, Tag, ZoteroLink
+from .llm import LLMClient, LLMNotConfigured
+from .models import ChatMessage, ChatSession, DeepWikiJob, DomainPack, LibraryEntry, LibraryTag, LLMProfile, Paper, PaperNote, PaperStudyState, Recommendation, RecommendationBatch, ResearchProfile, ResearchProject, ResearchProjectNote, ResearchProjectPaper, ResearchProjectStudy, ResearchStudy, Tag, ZoteroLink
 from .paper_sources import SemanticScholarSource
 from .paper_document_service import get_or_extract_paper_text
 from .recommendation import RecommendationService
 from .repository_service import RepositoryService
 from .scheduler import sync_scheduler
 from .reader_service import cached_pdf_path, reader_figure_path, save_reader_figure
-from .schemas import ChatSessionCreate, DomainPackCreate, DomainPackUpdate, DomainSearchPreviewRequest, DomainSourceTestRequest, GenerateRequest, LibraryFolderCreate, LibraryImportRequest, LibraryPaperFoldersRequest, LibraryPaperTagsRequest, LibraryScanRequest, LibraryTagCreate, LibraryTagUpdate, LLMProfileCreate, LLMProfileUpdate, NoteRequest, PaperChatRequest, ReaderFigureRequest, ReaderTranslateRequest, RepositoryBindRequest, ResearchProfileCreate, ResearchProfileUpdate, ResearchStudyCreate, SettingsUpdate, StudyStateRequest
+from .schemas import ChatSessionCreate, DomainPackCreate, DomainPackUpdate, DomainSearchPreviewRequest, DomainSourceTestRequest, GenerateRequest, LibraryFolderCreate, LibraryImportRequest, LibraryPaperFoldersRequest, LibraryPaperTagsRequest, LibraryScanRequest, LibraryTagCreate, LibraryTagUpdate, LLMProfileCreate, LLMProfileUpdate, NoteRequest, PaperChatRequest, ReaderFigureRequest, ReaderTranslateRequest, RepositoryBindRequest, ResearchProfileCreate, ResearchProfileUpdate, ResearchProjectChatRequest, ResearchProjectCreate, ResearchProjectNoteCreate, ResearchProjectPaperRequest, ResearchProjectPaperUpdate, ResearchProjectSearchRequest, ResearchProjectUpdate, ResearchStudyCreate, SettingsUpdate, StudyStateRequest
 from .serializers import batch_dict, job_dict, library_tag_dict, paper_dict, research_profile_dict, tag_dict
 from .settings_service import delete_llm_profile_key, get_active_llm_profile, get_settings, list_llm_profiles, llm_profile_dict, save_llm_profile_key, save_secrets, update_settings
 from .usage_service import token_usage_stats
 from .database import get_db
 from .zotero_service import ZoteroError, ZoteroService
 from .research_service import ResearchService, research_study_dict
+from .project_service import PAPER_ROLES, READING_STATUSES, add_project_paper, load_project, project_dict, reindex_project, save_chat, search_project
 
 
 router = APIRouter(prefix="/api")
@@ -353,6 +354,120 @@ def preview_domain_search(pack_id: int, payload: DomainSearchPreviewRequest, db:
     if not pack:
         raise HTTPException(status_code=404, detail="专业包不存在")
     return search_preview(pack, payload.query)
+
+
+@router.get("/projects")
+def list_projects(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    return [project_dict(item, detail=False) for item in db.scalars(select(ResearchProject).order_by(desc(ResearchProject.updated_at))).all()]
+
+
+@router.post("/projects")
+def create_project(payload: ResearchProjectCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    values = payload.model_dump()
+    project = ResearchProject(**{key: value for key, value in values.items() if key != "unresolved_questions"}, unresolved_questions_json=json.dumps(values["unresolved_questions"], ensure_ascii=False))
+    db.add(project); db.commit()
+    return project_dict(load_project(db, project.id))
+
+
+@router.get("/projects/{project_id}")
+def read_project(project_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    project = load_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="研究项目不存在")
+    return project_dict(project)
+
+
+@router.put("/projects/{project_id}")
+def update_project(project_id: int, payload: ResearchProjectUpdate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    project = db.get(ResearchProject, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="研究项目不存在")
+    values = payload.model_dump(exclude_unset=True)
+    if "unresolved_questions" in values:
+        project.unresolved_questions_json = json.dumps(values.pop("unresolved_questions") or [], ensure_ascii=False)
+    for key, value in values.items():
+        setattr(project, key, value)
+    db.commit()
+    return project_dict(load_project(db, project.id))
+
+
+@router.post("/projects/{project_id}/papers")
+def add_paper_to_project(project_id: int, payload: ResearchProjectPaperRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+    project, paper = db.get(ResearchProject, project_id), db.get(Paper, payload.paper_id)
+    if not project or not paper:
+        raise HTTPException(status_code=404, detail="研究项目或论文不存在")
+    try:
+        add_project_paper(db, project, paper, payload.role, payload.reading_status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit(); reindex_project(db, project_id); db.commit()
+    return project_dict(load_project(db, project_id))
+
+
+@router.put("/projects/{project_id}/papers/{paper_id}")
+def update_project_paper(project_id: int, paper_id: int, payload: ResearchProjectPaperUpdate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    link = db.scalar(select(ResearchProjectPaper).where(ResearchProjectPaper.project_id == project_id, ResearchProjectPaper.paper_id == paper_id))
+    if not link:
+        raise HTTPException(status_code=404, detail="项目论文不存在")
+    for key, value in payload.model_dump(exclude_none=True).items():
+        setattr(link, key, value)
+    db.commit()
+    return read_project(project_id, db)
+
+
+@router.delete("/projects/{project_id}/papers/{paper_id}")
+def unlink_project_paper(project_id: int, paper_id: int, db: Session = Depends(get_db)) -> dict[str, bool]:
+    link = db.scalar(select(ResearchProjectPaper).where(ResearchProjectPaper.project_id == project_id, ResearchProjectPaper.paper_id == paper_id))
+    if link:
+        db.delete(link); db.commit(); reindex_project(db, project_id); db.commit()
+    return {"unlinked": bool(link)}
+
+
+@router.post("/projects/{project_id}/notes")
+def create_project_note(project_id: int, payload: ResearchProjectNoteCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    if not db.get(ResearchProject, project_id):
+        raise HTTPException(status_code=404, detail="研究项目不存在")
+    note = ResearchProjectNote(project_id=project_id, **payload.model_dump())
+    db.add(note); db.commit(); reindex_project(db, project_id); db.commit()
+    return {"id": note.id, "title": note.title, "content": note.content, "updated_at": note.updated_at}
+
+
+@router.post("/projects/{project_id}/studies/{study_id}")
+def link_project_study(project_id: int, study_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    if not db.get(ResearchProject, project_id) or not db.get(ResearchStudy, study_id):
+        raise HTTPException(status_code=404, detail="研究项目或专题调研不存在")
+    existing = db.scalar(select(ResearchProjectStudy).where(ResearchProjectStudy.project_id == project_id, ResearchProjectStudy.study_id == study_id))
+    if not existing:
+        db.add(ResearchProjectStudy(project_id=project_id, study_id=study_id)); db.commit()
+    return read_project(project_id, db)
+
+
+@router.post("/projects/{project_id}/search")
+def search_within_project(project_id: int, payload: ResearchProjectSearchRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+    if not db.get(ResearchProject, project_id):
+        raise HTTPException(status_code=404, detail="研究项目不存在")
+    items = search_project(db, project_id, payload.query, payload.limit); db.commit()
+    return {"query": payload.query, "items": items}
+
+
+@router.post("/projects/{project_id}/chat")
+async def chat_with_project(project_id: int, payload: ResearchProjectChatRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+    if not db.get(ResearchProject, project_id):
+        raise HTTPException(status_code=404, detail="研究项目不存在")
+    sources = search_project(db, project_id, payload.message, 8)
+    if not sources:
+        answer = "当前项目中没有检索到足够证据。请先加入相关论文、笔记、专题调研或 DeepWiki。"
+        inferred = False
+    else:
+        context = "\n\n".join(f"[S{i + 1}] 类型={item['source_label']} 标题={item['title']}\n{item['excerpt']}" for i, item in enumerate(sources))
+        try:
+            answer = await LLMClient(db).chat_about_project(context, payload.message)
+            inferred = True
+        except (LLMNotConfigured, httpx.HTTPError):
+            answer = "未配置 LLM，已可靠降级为项目内检索结果。下面片段均来自当前项目，不包含外部内容。\n\n" + "\n\n".join(f"[S{i + 1} · {item['source_label']}] {item['title']}：{item['excerpt']}" for i, item in enumerate(sources))
+            inferred = False
+    save_chat(db, project_id, payload.message, answer, sources); db.commit()
+    return {"answer": answer, "sources": sources, "contains_ai_inference": inferred}
 
 
 @router.post("/research-profiles")

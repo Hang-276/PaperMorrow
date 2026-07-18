@@ -158,6 +158,13 @@ export type DomainPack = {
   citation_config:Record<string,any>; impact_config:Record<string,any>; metrics:{id?:number;name:string;value:number;year:number;source_url:string}[]; created_at:string; updated_at:string
 }
 
+export type ResearchProject = {
+  id:number; title:string; research_question:string; research_direction:string; domain_pack_id?:number|null; research_profile_id?:number|null
+  repository_url?:string|null; deepwiki_job_id?:number|null; current_conclusion:string; unresolved_questions:string[]; next_reading_suggestion:string
+  created_at:string; updated_at:string; study_ids?:number[]; notes?:{id:number;title:string;content:string;updated_at:string}[]
+  papers?:{link_id:number;paper_id:number;title:string;title_zh?:string|null;role:'core'|'support'|'conflict'|'background'|'to_verify';reading_status:'to_screen'|'to_read'|'reading'|'read_to_organize'|'completed'|'shelved';queue_order:number;venue?:string|null}[]
+}
+
 export type DeepWikiJob = {
   id: number
   paper_id: number

@@ -196,6 +196,15 @@ The available context may contain only metadata and abstracts, not the full PDF.
             return await self._claude_chat(system, messages, "chat")
         return await self._openai_chat(system, messages, "chat")
 
+    async def chat_about_project(self, project_context: str, question: str) -> str:
+        if not self.configured:
+            raise LLMNotConfigured("尚未配置 LLM API")
+        system = """你是严谨的研究项目助手。只能使用已检索到的当前项目片段回答。每个可核验陈述都要用提供的来源编号引用；明确区分论文、笔记、Wiki、专题调研和 AI 推断。证据不足时直接说明，不得补造。"""
+        messages = [{"role": "user", "content": f"当前项目检索结果：\n{project_context[:50000]}\n\n问题：{question}"}]
+        if self.provider == "claude":
+            return await self._claude_chat(system, messages, "project_chat")
+        return await self._openai_chat(system, messages, "project_chat")
+
     async def _openai_compatible(self, prompt: str, purpose: str = "other") -> dict[str, Any]:
         url = self._chat_url()
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}

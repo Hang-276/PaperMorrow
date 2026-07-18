@@ -459,3 +459,77 @@ class DeepWikiJob(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     paper: Mapped[Paper] = relationship()
+
+
+class ResearchProject(Base):
+    __tablename__ = "research_projects"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(500))
+    research_question: Mapped[str] = mapped_column(Text, default="")
+    research_direction: Mapped[str] = mapped_column(Text, default="")
+    domain_pack_id: Mapped[int | None] = mapped_column(ForeignKey("domain_packs.id", ondelete="SET NULL"), nullable=True, index=True)
+    research_profile_id: Mapped[int | None] = mapped_column(ForeignKey("research_profiles.id", ondelete="SET NULL"), nullable=True, index=True)
+    repository_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    deepwiki_job_id: Mapped[int | None] = mapped_column(ForeignKey("deepwiki_jobs.id", ondelete="SET NULL"), nullable=True)
+    current_conclusion: Mapped[str] = mapped_column(Text, default="")
+    unresolved_questions_json: Mapped[str] = mapped_column(Text, default="[]")
+    next_reading_suggestion: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    papers: Mapped[list["ResearchProjectPaper"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="ResearchProjectPaper.queue_order")
+    notes: Mapped[list["ResearchProjectNote"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="ResearchProjectNote.updated_at")
+    studies: Mapped[list["ResearchProjectStudy"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+
+
+class ResearchProjectPaper(Base):
+    __tablename__ = "research_project_papers"
+    __table_args__ = (UniqueConstraint("project_id", "paper_id", name="uq_research_project_paper"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("research_projects.id", ondelete="CASCADE"), index=True)
+    paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(24), default="to_verify")
+    reading_status: Mapped[str] = mapped_column(String(32), default="to_screen")
+    queue_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    project: Mapped[ResearchProject] = relationship(back_populates="papers")
+    paper: Mapped[Paper] = relationship()
+
+
+class ResearchProjectNote(Base):
+    __tablename__ = "research_project_notes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("research_projects.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(300), default="项目笔记")
+    content: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    project: Mapped[ResearchProject] = relationship(back_populates="notes")
+
+
+class ResearchProjectStudy(Base):
+    __tablename__ = "research_project_studies"
+    __table_args__ = (UniqueConstraint("project_id", "study_id", name="uq_research_project_study"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("research_projects.id", ondelete="CASCADE"), index=True)
+    study_id: Mapped[int] = mapped_column(ForeignKey("research_studies.id", ondelete="CASCADE"), index=True)
+    project: Mapped[ResearchProject] = relationship(back_populates="studies")
+    study: Mapped[ResearchStudy] = relationship()
+
+
+class ProjectChatMessage(Base):
+    __tablename__ = "project_chat_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("research_projects.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(16))
+    content: Mapped[str] = mapped_column(Text)
+    sources_json: Mapped[str] = mapped_column(Text, default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

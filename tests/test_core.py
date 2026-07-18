@@ -950,3 +950,38 @@ def test_llm_research_ranks_deduplicates_and_generates_review():
                 db.delete(paper)
         db.commit()
         db.close()
+
+
+def test_research_project_workflow_and_fts_are_project_scoped():
+    marker = uuid.uuid4().hex[:12]
+    db = SessionLocal()
+    paper = Paper(title_en=f"Scoped Project Evidence {marker}", abstract_en=f"exclusive-evidence-{marker} supports a reproducible method", authors_json="[]", primary_url=f"https://example.com/{marker}", identity_hash=uuid.uuid4().hex)
+    db.add(paper); db.commit(); paper_id = paper.id; db.close()
+    project_ids = []
+    try:
+        with TestClient(app) as client:
+            for suffix in ("A", "B"):
+                response = client.post("/api/projects", json={"title": f"Project {suffix} {marker}", "research_question": "What is supported?"})
+                assert response.status_code == 200
+                project_ids.append(response.json()["id"])
+            added = client.post(f"/api/projects/{project_ids[0]}/papers", json={"paper_id": paper_id, "role": "core", "reading_status": "reading"})
+            assert added.status_code == 200
+            assert added.json()["papers"][0]["role"] == "core"
+            found = client.post(f"/api/projects/{project_ids[0]}/search", json={"query": f"exclusive evidence {marker}"}).json()["items"]
+            isolated = client.post(f"/api/projects/{project_ids[1]}/search", json={"query": f"exclusive evidence {marker}"}).json()["items"]
+            assert found and found[0]["source_type"] == "paper"
+            assert isolated == []
+            chat = client.post(f"/api/projects/{project_ids[0]}/chat", json={"message": f"exclusive evidence {marker}"})
+            assert chat.status_code == 200
+            assert chat.json()["sources"] and chat.json()["contains_ai_inference"] is False
+            updated = client.put(f"/api/projects/{project_ids[0]}/papers/{paper_id}", json={"reading_status": "completed", "role": "support"})
+            assert updated.json()["papers"][0]["reading_status"] == "completed"
+    finally:
+        db = SessionLocal()
+        from backend.app.models import ResearchProject
+        for project_id in project_ids:
+            project = db.get(ResearchProject, project_id)
+            if project: db.delete(project)
+        paper = db.get(Paper, paper_id)
+        if paper: db.delete(paper)
+        db.commit(); db.close()
