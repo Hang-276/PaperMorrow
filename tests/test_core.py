@@ -1048,3 +1048,29 @@ def test_structured_research_artifacts_are_traceable():
         db.delete(study); db.flush()
         for paper in papers: db.delete(paper)
         db.commit(); db.close()
+
+
+def test_grounded_graph_and_reproduction_status_contract():
+    from backend.app.knowledge_graph_service import CHECK_STATUSES, add_resource, create_grounded_edge, generate_reproduction_checklist, upsert_node
+    from backend.app.models import KnowledgeEdge, KnowledgeNode, PaperResource, ReproductionCheck
+    marker=uuid.uuid4().hex[:10]; db=SessionLocal()
+    paper=Paper(title_en=f"Graph Paper {marker}",abstract_en="method evidence",authors_json="[]",primary_url=f"https://example.com/{marker}",identity_hash=uuid.uuid4().hex,repository_url=f"https://github.com/example/{marker}",repository_status="candidate")
+    db.add(paper); db.flush()
+    paper_node=upsert_node(db,"paper",paper.title_en,f"paper:{paper.id}")
+    method_node=upsert_node(db,"method","Verified training",f"method:{marker}")
+    edge=create_grounded_edge(db,paper_node.id,method_node.id,"proposes","paper",str(paper.id),"Abstract states the method.",.82)
+    add_resource(db,paper,"model_weights",f"https://example.com/{marker}/weights","Weights","user",True)
+    checks=generate_reproduction_checklist(db,paper,None); db.commit()
+    try:
+        assert edge.evidence and edge.confidence == .82
+        assert all(item.status in CHECK_STATUSES for item in checks)
+        assert next(item for item in checks if item.check_key=="method_alignment").status == "unable_to_confirm"
+        assert next(item for item in checks if item.check_key=="repository").status == "possibly_consistent"
+        assert next(item for item in checks if item.check_key=="weights").status == "confirmed"
+        with pytest.raises(ValueError):
+            create_grounded_edge(db,paper_node.id,method_node.id,"semantic_similarity","ai","x","looks similar",.9)
+        assert not db.query(KnowledgeEdge).filter(KnowledgeEdge.relation_type.like("%similar%")).count()
+    finally:
+        db.query(ReproductionCheck).filter_by(paper_id=paper.id).delete(synchronize_session=False)
+        db.query(PaperResource).filter_by(paper_id=paper.id).delete(synchronize_session=False)
+        db.delete(edge); db.delete(paper_node); db.delete(method_node); db.delete(paper); db.commit(); db.close()

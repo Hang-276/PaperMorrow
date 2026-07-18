@@ -255,8 +255,8 @@ export type ResearchStudy = {
 }
 
 export type KnowledgeGraphData = {
-  nodes: { id:string; type:'paper'|'folder'|'tag'|'concept'; label:string; paper_id?:number; color?:string }[]
-  edges: { source:string; target:string; type:string }[]
+  nodes: { id:string; type:string; label:string; paper_id?:number; color?:string; metadata?:Record<string,any> }[]
+  edges: { source:string; target:string; type:string; evidence?:string;confidence?:number;confirmed?:boolean;source_type?:string;source_id?:string }[]
 }
 
 export type LLMProfile = {

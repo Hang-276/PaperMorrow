@@ -25,7 +25,7 @@ from .recommendation import RecommendationService
 from .repository_service import RepositoryService
 from .scheduler import sync_scheduler
 from .reader_service import cached_pdf_path, reader_figure_path, save_reader_figure
-from .schemas import ChatSessionCreate, DomainPackCreate, DomainPackUpdate, DomainSearchPreviewRequest, DomainSourceTestRequest, GenerateRequest, LibraryFolderCreate, LibraryImportRequest, LibraryPaperFoldersRequest, LibraryPaperTagsRequest, LibraryScanRequest, LibraryTagCreate, LibraryTagUpdate, LLMProfileCreate, LLMProfileUpdate, NoteRequest, PaperChatRequest, PaperEvidenceUpdate, PaperVersionLinkRequest, ReaderFigureRequest, ReaderTranslateRequest, RepositoryBindRequest, ResearchProfileCreate, ResearchProfileUpdate, ResearchProjectChatRequest, ResearchProjectCreate, ResearchProjectNoteCreate, ResearchProjectPaperRequest, ResearchProjectPaperUpdate, ResearchProjectSearchRequest, ResearchProjectUpdate, ResearchStudyCreate, SettingsUpdate, StudyStateRequest
+from .schemas import ChatSessionCreate, DomainPackCreate, DomainPackUpdate, DomainSearchPreviewRequest, DomainSourceTestRequest, GenerateRequest, KnowledgeEdgeCreate, KnowledgeNodeCreate, LibraryFolderCreate, LibraryImportRequest, LibraryPaperFoldersRequest, LibraryPaperTagsRequest, LibraryScanRequest, LibraryTagCreate, LibraryTagUpdate, LLMProfileCreate, LLMProfileUpdate, NoteRequest, PaperChatRequest, PaperEvidenceUpdate, PaperResourceCreate, PaperVersionLinkRequest, ReaderFigureRequest, ReaderTranslateRequest, RepositoryBindRequest, ResearchProfileCreate, ResearchProfileUpdate, ResearchProjectChatRequest, ResearchProjectCreate, ResearchProjectNoteCreate, ResearchProjectPaperRequest, ResearchProjectPaperUpdate, ResearchProjectSearchRequest, ResearchProjectUpdate, ResearchStudyCreate, SettingsUpdate, StudyStateRequest
 from .serializers import batch_dict, job_dict, library_tag_dict, paper_dict, research_profile_dict, tag_dict
 from .settings_service import delete_llm_profile_key, get_active_llm_profile, get_settings, list_llm_profiles, llm_profile_dict, save_llm_profile_key, save_secrets, update_settings
 from .usage_service import token_usage_stats
@@ -34,6 +34,7 @@ from .zotero_service import ZoteroError, ZoteroService
 from .research_service import ResearchService, research_study_dict
 from .project_service import PAPER_ROLES, READING_STATUSES, add_project_paper, load_project, project_dict, reindex_project, save_chat, search_project
 from .evidence_service import evidence_dict, link_versions, replace_analysis_evidence, split_version, undo_last_version_action, work_timeline
+from .knowledge_graph_service import add_resource, check_dict, create_grounded_edge, generate_reproduction_checklist, resource_dict, unified_graph, upsert_node
 
 
 router = APIRouter(prefix="/api")
@@ -188,7 +189,52 @@ def set_library_paper_folders(paper_id: int, payload: LibraryPaperFoldersRequest
 
 @router.get("/library/knowledge-graph")
 def library_knowledge_graph(db: Session = Depends(get_db)) -> dict[str, Any]:
-    return LibraryFolderService(db).knowledge_graph()
+    return unified_graph(db, LibraryFolderService(db).knowledge_graph())
+
+
+@router.post("/knowledge-graph/nodes")
+def create_knowledge_node(payload: KnowledgeNodeCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        node = upsert_node(db, payload.node_type, payload.label, payload.external_key, payload.metadata); db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"id": node.id, "node_type": node.node_type, "label": node.label, "external_key": node.external_key}
+
+
+@router.post("/knowledge-graph/edges")
+def create_knowledge_edge(payload: KnowledgeEdgeCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        edge = create_grounded_edge(db, **payload.model_dump()); db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"id": edge.id, "relation_type": edge.relation_type, "evidence": edge.evidence, "confidence": edge.confidence, "confirmed": edge.confirmed}
+
+
+@router.get("/papers/{paper_id}/resources")
+def list_paper_resources(paper_id: int, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    from .models import PaperResource
+    _paper_or_404(db, paper_id)
+    return [resource_dict(item) for item in db.scalars(select(PaperResource).where(PaperResource.paper_id == paper_id).order_by(PaperResource.id)).all()]
+
+
+@router.post("/papers/{paper_id}/resources")
+def create_paper_resource(paper_id: int, payload: PaperResourceCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        row = add_resource(db, _paper_or_404(db, paper_id), payload.resource_type, str(payload.url), payload.label, payload.source, payload.verified); db.commit(); db.refresh(row)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return resource_dict(row)
+
+
+@router.post("/papers/{paper_id}/reproduction-checklist")
+def build_reproduction_checklist(paper_id: int, deepwiki_job_id: int | None = None, db: Session = Depends(get_db)) -> dict[str, Any]:
+    paper = _paper_or_404(db, paper_id)
+    job = db.get(DeepWikiJob, deepwiki_job_id) if deepwiki_job_id else db.scalar(select(DeepWikiJob).where(DeepWikiJob.paper_id == paper_id).order_by(DeepWikiJob.id.desc()))
+    if deepwiki_job_id and (not job or job.paper_id != paper_id):
+        raise HTTPException(status_code=404, detail="DeepWiki 任务与论文不匹配")
+    items = generate_reproduction_checklist(db, paper, job); db.commit()
+    return {"paper_id": paper.id, "deepwiki_job_id": job.id if job else None, "items": [check_dict(item) for item in items],
+            "allowed_statuses": ["confirmed", "possibly_consistent", "missing", "unable_to_confirm"]}
 
 
 @router.get("/library/files/{file_id}/pdf")

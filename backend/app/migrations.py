@@ -152,11 +152,36 @@ def _migration_004_research_artifacts(connection) -> None:
         cited_review_markdown TEXT NOT NULL DEFAULT '', generated_at DATETIME NOT NULL)"""))
 
 
+def _migration_005_grounded_knowledge_graph(connection) -> None:
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS knowledge_nodes (
+        id INTEGER PRIMARY KEY, node_type VARCHAR(40) NOT NULL, label TEXT NOT NULL,
+        external_key VARCHAR(300) NOT NULL UNIQUE, metadata_json TEXT NOT NULL DEFAULT '{}', created_at DATETIME NOT NULL)"""))
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS knowledge_edges (
+        id INTEGER PRIMARY KEY, source_node_id INTEGER NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
+        target_node_id INTEGER NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE, relation_type VARCHAR(40) NOT NULL,
+        source_type VARCHAR(40) NOT NULL, source_id VARCHAR(300) NOT NULL, evidence TEXT NOT NULL,
+        confidence FLOAT NOT NULL, confirmed BOOLEAN NOT NULL DEFAULT 0, created_at DATETIME NOT NULL)"""))
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS paper_resources (
+        id INTEGER PRIMARY KEY, paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+        resource_type VARCHAR(32) NOT NULL, url TEXT NOT NULL, label VARCHAR(300) NOT NULL DEFAULT '',
+        source VARCHAR(40) NOT NULL DEFAULT 'user', verified BOOLEAN NOT NULL DEFAULT 0, created_at DATETIME NOT NULL,
+        UNIQUE(paper_id, resource_type, url))"""))
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS reproduction_checks (
+        id INTEGER PRIMARY KEY, paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+        deepwiki_job_id INTEGER REFERENCES deepwiki_jobs(id) ON DELETE SET NULL, check_key VARCHAR(80) NOT NULL,
+        title VARCHAR(300) NOT NULL, status VARCHAR(32) NOT NULL, evidence TEXT NOT NULL DEFAULT '',
+        details TEXT NOT NULL DEFAULT '', created_at DATETIME NOT NULL)"""))
+    connection.execute(text("CREATE INDEX IF NOT EXISTS ix_knowledge_edges_source ON knowledge_edges(source_node_id)"))
+    connection.execute(text("CREATE INDEX IF NOT EXISTS ix_knowledge_edges_target ON knowledge_edges(target_node_id)"))
+    connection.execute(text("CREATE INDEX IF NOT EXISTS ix_paper_resources_paper ON paper_resources(paper_id)"))
+
+
 MIGRATIONS = [
     ("001_domain_packs", _migration_001_domain_packs),
     ("002_research_projects", _migration_002_research_projects),
     ("003_paper_evidence_versions", _migration_003_paper_evidence_versions),
     ("004_research_artifacts", _migration_004_research_artifacts),
+    ("005_grounded_knowledge_graph", _migration_005_grounded_knowledge_graph),
 ]
 
 

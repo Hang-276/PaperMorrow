@@ -242,6 +242,32 @@ class PaperVersionLinkRequest(BaseModel):
     user_confirmed: bool = False
 
 
+class KnowledgeNodeCreate(BaseModel):
+    node_type: Literal["paper", "method", "task", "dataset", "benchmark", "model", "experiment_conclusion", "limitation", "repository", "weight", "project"]
+    label: str = Field(min_length=1, max_length=1000)
+    external_key: str = Field(min_length=1, max_length=300)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class KnowledgeEdgeCreate(BaseModel):
+    source_node_id: int
+    target_node_id: int
+    relation_type: Literal["proposes", "uses", "improves", "evaluated_on", "supports", "refutes", "implements", "reproduces", "extends"]
+    source_type: str = Field(min_length=1, max_length=40)
+    source_id: str = Field(min_length=1, max_length=300)
+    evidence: str = Field(min_length=1, max_length=5000)
+    confidence: float = Field(ge=0, le=1)
+    confirmed: bool = False
+
+
+class PaperResourceCreate(BaseModel):
+    resource_type: Literal["official_repository", "third_party_reproduction", "model_weights", "dataset", "project_page"]
+    url: HttpUrl
+    label: str = Field(default="", max_length=300)
+    source: str = Field(default="user", max_length=40)
+    verified: bool = False
+
+
 class ReaderTranslateRequest(BaseModel):
     text: str = Field(min_length=1, max_length=20_000)
     page: int | None = Field(default=None, ge=1, le=1000)

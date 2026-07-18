@@ -70,6 +70,9 @@ def run_deepwiki_job(job_id: int) -> None:
         job.output_dir = str(output_dir)
         job.error = None
         _update(db, job, "completed", 100, "原版 DeepWiki 完整研究 Wiki 已生成")
+        from .knowledge_graph_service import generate_reproduction_checklist
+        generate_reproduction_checklist(db, job.paper, job)
+        db.commit()
     except Exception as exc:
         job.error = str(exc)[:2000]
         _update(db, job, "failed", job.progress, "解析失败")

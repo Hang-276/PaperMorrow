@@ -607,3 +607,57 @@ class PaperAnalysisEvidence(Base):
     conclusion_type: Mapped[str] = mapped_column(String(24), default="paper_fact")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     paper: Mapped[Paper] = relationship(back_populates="analysis_evidence")
+
+
+class KnowledgeNode(Base):
+    __tablename__ = "knowledge_nodes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    node_type: Mapped[str] = mapped_column(String(40), index=True)
+    label: Mapped[str] = mapped_column(Text)
+    external_key: Mapped[str] = mapped_column(String(300), unique=True, index=True)
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KnowledgeEdge(Base):
+    __tablename__ = "knowledge_edges"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_node_id: Mapped[int] = mapped_column(ForeignKey("knowledge_nodes.id", ondelete="CASCADE"), index=True)
+    target_node_id: Mapped[int] = mapped_column(ForeignKey("knowledge_nodes.id", ondelete="CASCADE"), index=True)
+    relation_type: Mapped[str] = mapped_column(String(40), index=True)
+    source_type: Mapped[str] = mapped_column(String(40))
+    source_id: Mapped[str] = mapped_column(String(300))
+    evidence: Mapped[str] = mapped_column(Text)
+    confidence: Mapped[float] = mapped_column(Float)
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PaperResource(Base):
+    __tablename__ = "paper_resources"
+    __table_args__ = (UniqueConstraint("paper_id", "resource_type", "url", name="uq_paper_resource"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), index=True)
+    resource_type: Mapped[str] = mapped_column(String(32))
+    url: Mapped[str] = mapped_column(Text)
+    label: Mapped[str] = mapped_column(String(300), default="")
+    source: Mapped[str] = mapped_column(String(40), default="user")
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ReproductionCheck(Base):
+    __tablename__ = "reproduction_checks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), index=True)
+    deepwiki_job_id: Mapped[int | None] = mapped_column(ForeignKey("deepwiki_jobs.id", ondelete="SET NULL"), nullable=True)
+    check_key: Mapped[str] = mapped_column(String(80))
+    title: Mapped[str] = mapped_column(String(300))
+    status: Mapped[str] = mapped_column(String(32))
+    evidence: Mapped[str] = mapped_column(Text, default="")
+    details: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
