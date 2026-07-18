@@ -18,7 +18,7 @@ from backend.app.main import app
 from backend.app.database import SessionLocal, init_db
 from backend.app.models import ChatSession, DomainPack, LibraryEntry, LibraryFolder, LibraryTag, LocalPaperFile, Paper, PaperNote, RecommendationAssessment, RecommendationBatch, ResearchProfile, ResearchStudy, Tag, TokenUsage
 from backend.app.library_folder_service import LibraryFolderService
-from backend.app.research_service import ResearchService
+from backend.app.research_service import ResearchService, research_study_dict
 from backend.app.recommendation import RecommendationService
 from backend.app.paper_sources import PaperCandidate
 from backend.app.recommendation import identity_hash, normalize_title
@@ -1023,4 +1023,28 @@ def test_evidence_scope_and_conservative_version_actions():
             if paper: db.delete(paper)
         db.commit()
         for work in db.query(PaperWork).filter(PaperWork.canonical_title.like(f"%{marker}%")).all(): db.delete(work)
+        db.commit(); db.close()
+
+
+def test_structured_research_artifacts_are_traceable():
+    marker=uuid.uuid4().hex[:10]
+    db=SessionLocal(); papers=[]
+    study=ResearchStudy(domain="ai",prompt="traceable research",title=f"Traceable {marker}",status="completed",core_concepts_json='["verification","memory"]')
+    db.add(study); db.flush()
+    for index in range(2):
+        paper=Paper(title_en=f"Evidence Paper {index} {marker}",abstract_en="Supported abstract claim.",authors_json="[]",primary_url=f"https://example.com/{marker}/{index}",identity_hash=uuid.uuid4().hex)
+        db.add(paper); db.flush(); papers.append(paper)
+        from backend.app.models import ResearchStudyPaper
+        study.papers.append(ResearchStudyPaper(paper_id=paper.id,rank=index+1,reason="摘要支持的关联理由",confidence=80,final_score=80))
+    db.commit()
+    try:
+        ResearchService(db).build_artifacts(study); db.commit(); db.refresh(study)
+        payload=research_study_dict(study)["artifacts"]
+        assert payload["comparison"] and all(row["citation"].startswith("P") for row in payload["comparison"])
+        for key in ("taxonomy","research_routes","controversies","gaps"):
+            assert all(item["citations"] for item in payload[key])
+        assert all(item["inference"] is True for item in payload["controversies"]+payload["gaps"])
+    finally:
+        db.delete(study); db.flush()
+        for paper in papers: db.delete(paper)
         db.commit(); db.close()

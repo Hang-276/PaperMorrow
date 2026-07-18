@@ -315,6 +315,7 @@ class ResearchStudy(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     papers: Mapped[list["ResearchStudyPaper"]] = relationship(back_populates="study", cascade="all, delete-orphan", order_by="ResearchStudyPaper.rank")
+    artifacts: Mapped["ResearchStudyArtifact | None"] = relationship(back_populates="study", uselist=False, cascade="all, delete-orphan")
 
 
 class ResearchStudyPaper(Base):
@@ -336,6 +337,21 @@ class ResearchStudyPaper(Base):
 
     study: Mapped[ResearchStudy] = relationship(back_populates="papers")
     paper: Mapped[Paper] = relationship(back_populates="research_results")
+
+
+class ResearchStudyArtifact(Base):
+    __tablename__ = "research_study_artifacts"
+
+    study_id: Mapped[int] = mapped_column(ForeignKey("research_studies.id", ondelete="CASCADE"), primary_key=True)
+    taxonomy_json: Mapped[str] = mapped_column(Text, default="[]")
+    comparison_json: Mapped[str] = mapped_column(Text, default="[]")
+    research_routes_json: Mapped[str] = mapped_column(Text, default="[]")
+    representative_works_json: Mapped[str] = mapped_column(Text, default="[]")
+    controversies_json: Mapped[str] = mapped_column(Text, default="[]")
+    gaps_json: Mapped[str] = mapped_column(Text, default="[]")
+    cited_review_markdown: Mapped[str] = mapped_column(Text, default="")
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    study: Mapped[ResearchStudy] = relationship(back_populates="artifacts")
 
 
 class ZoteroLink(Base):

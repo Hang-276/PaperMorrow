@@ -238,7 +238,7 @@ export type ResearchStudyPaper = {
 
 export type ResearchStudy = {
   id: number
-  domain: 'ai'|'computer'|'physics'|'math'
+  domain: string
   prompt: string
   title: string
   status: string
@@ -249,6 +249,7 @@ export type ResearchStudy = {
   error?: string | null
   paper_count: number
   papers?: ResearchStudyPaper[]
+  artifacts?: {taxonomy:any[];comparison:any[];research_routes:any[];representative_works:any[];controversies:any[];gaps:any[];cited_review_markdown:string;generated_at:string}|null
   created_at: string
   updated_at: string
 }

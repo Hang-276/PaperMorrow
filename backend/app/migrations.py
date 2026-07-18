@@ -143,10 +143,20 @@ def _migration_003_paper_evidence_versions(connection) -> None:
     connection.execute(text("CREATE INDEX IF NOT EXISTS ix_paper_analysis_evidence_paper ON paper_analysis_evidence(paper_id)"))
 
 
+def _migration_004_research_artifacts(connection) -> None:
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS research_study_artifacts (
+        study_id INTEGER PRIMARY KEY REFERENCES research_studies(id) ON DELETE CASCADE,
+        taxonomy_json TEXT NOT NULL DEFAULT '[]', comparison_json TEXT NOT NULL DEFAULT '[]',
+        research_routes_json TEXT NOT NULL DEFAULT '[]', representative_works_json TEXT NOT NULL DEFAULT '[]',
+        controversies_json TEXT NOT NULL DEFAULT '[]', gaps_json TEXT NOT NULL DEFAULT '[]',
+        cited_review_markdown TEXT NOT NULL DEFAULT '', generated_at DATETIME NOT NULL)"""))
+
+
 MIGRATIONS = [
     ("001_domain_packs", _migration_001_domain_packs),
     ("002_research_projects", _migration_002_research_projects),
     ("003_paper_evidence_versions", _migration_003_paper_evidence_versions),
+    ("004_research_artifacts", _migration_004_research_artifacts),
 ]
 
 

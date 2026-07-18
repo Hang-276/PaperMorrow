@@ -234,6 +234,18 @@ async def generate_research_review(study_id: int, db: Session = Depends(get_db))
     return research_study_dict(study)
 
 
+@router.post("/research/studies/{study_id}/artifacts")
+def generate_research_artifacts(study_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    study = db.get(ResearchStudy, study_id)
+    if not study:
+        raise HTTPException(status_code=404, detail="调研记录不存在")
+    try:
+        ResearchService(db).build_artifacts(study); db.commit(); db.refresh(study)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return research_study_dict(study)
+
+
 @router.post("/zotero/test")
 async def test_zotero_connection(db: Session = Depends(get_db)) -> dict[str, Any]:
     try:
