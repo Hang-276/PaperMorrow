@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= pageTitle %> - <%= structure.title %></title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>
+        <a href="/">Wiki</a> / 
+        <a href="/<%= project %>"><%= structure.title %></a> / 
+        <%= pageTitle %>
+      </h1>
+    </header>
+    <div class="content-wrapper">
+      <aside class="sidebar">
+        <nav>
+          <% structure.sections.forEach(section => { %>
+            <div class="sidebar-section">
+              <h3><%= section.title %></h3>
+              <ul>
+                <% section.pages.forEach(pageId => { %>
+                  <% const pageInfo = structure.pages.find(p => p.id === pageId); %>
+                  <li>
+                    <a 
+                      href="/<%= project %>/page/<%= pageId %>" 
+                      class="<%= pageId === currentPageId ? 'active' : '' %>"
+                    >
+                      <%= pageInfo ? pageInfo.title : pageId %>
+                    </a>
+                  </li>
+                <% }); %>
+              </ul>
+            </div>
+          <% }); %>
+        </nav>
+      </aside>
+      <main class="content">
+        <article class="markdown-body">
+          <%- content %>
+        </article>
+      </main>
+    </div>
+    <footer>
+      <p>&copy; 2025 DeepWiki</p>
+    </footer>
+  </div>
+  
+  <script>
+    // 确保DOM加载完成后再初始化mermaid
+    document.addEventListener('DOMContentLoaded', function() {
+      // 初始化mermaid，确保使用白天模式并调整文字颜色为深色
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: 'default',
+        darkMode: false,
+        themeVariables: {
+          primaryColor: '#0366d6',
+          primaryTextColor: '#000000',
+          secondaryColor: '#e1e4e8',
+          tertiaryColor: '#f6f8fa',
+          lineColor: '#333333',
+          primaryBorderColor: '#7c7c7c',
+          nodeTextColor: '#000000',
+          defaultLinkColor: '#666666',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        }
+      });
+      
+      // 高亮当前页面
+      const currentPath = window.location.pathname;
+      const links = document.querySelectorAll('.sidebar a');
+      links.forEach(link => {
+        if (link.getAttribute('href') === currentPath) {
+          link.classList.add('active');
+        }
+      });
+      
+      // 手动触发mermaid渲染
+      if (typeof mermaid !== 'undefined') {
+        mermaid.init();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+你是一个代码授课老师，需要仔细分析代码仓库的代码结构，需要生成一份教程，用于向完全无基础的学生介绍该项目。
+现在你需要生成一份教程的wiki structure
+
+IMPORTANT: The wiki content will be generated in Chinese language.
+
+When designing the wiki structure, include pages that would benefit from visual diagrams, such as:
+- Architecture overviews
+- Data flow descriptions
+- Component relationships
+- Process workflows
+- State machines
+- Class hierarchies
+
+Create a structured wiki with the following main sections:
+- Overview (general information about the project)
+- System Architecture (how the system is designed)
+- Core Features (key functionality)
+- Data Management/Flow: If applicable, how data is stored, processed, accessed, and managed (e.g., database schema, data pipelines, state management).
+- Frontend Components (UI elements, if applicable.)
+- Backend Systems (server-side components)
+- Model Integration (AI model connections)
+- Deployment/Infrastructure (how to deploy, what's the infrastructure like)
+- Extensibility and Customization: If the project architecture supports it, explain how to extend or customize its functionality (e.g., plugins, theming, custom modules, hooks).
+
+Each section should contain relevant pages. For example, the "Frontend Components" section might include pages for "Home Page", "Repository Wiki Page", "Ask Component", etc.
+
+Return your analysis in the following JSON format without ``` :
+
+{
+    "title": "[Overall title for the wiki]",
+    "description": "[Brief description of the repository]",
+    "sections": [
+        {
+            "id": "section-1",
+            "title": "[Section title]",
+            "pages": [
+                "page-1",
+                "page-2"
+            ],
+            "subsections": [
+                "section-2",
+            ]
+        }
+    ],
+    "pages": [
+        {
+            "id": "page-1",
+            "title": "[Page title]",
+            "description": "[Brief description of what this page will cover]",
+            "importance": "high|medium|low",
+            "relevant_files": [
+                "[Path to a relevant file1]",
+                "[Path to a relevant file2]"
+            ],
+            "related_pages": [
+                "page-2",
+                "page-3"
+            ],
+            "parent_section": "section-1"
+        }
+    ]
+}
+
+IMPORTANT FORMATTING INSTRUCTIONS:
+- Return ONLY the valid JSON structure specified above
+- DO NOT wrap the JSON in markdown code blocks (no ``` or ```json)
+- DO NOT include any explanation text before or after the JSON
+- Ensure the JSON is properly formatted and valid
+
+Please generate a complete JSON data set, ensuring:
+1. All curly braces and square brackets are correctly closed
+2. String quotes are complete
+3. A complete JSON structure is generated
+If the content is lengthy, please ensure it is completed within the limit.
+
+
+IMPORTANT:
+1. Create 8-30 pages that would make a comprehensive wiki for this repository
+2. Each page should focus on a specific aspect of the codebase (e.g., architecture, key features, setup)
+3. The relevant_files should be actual files from the repository that would be used to generate that page
+4. Return ONLY valid JSON with the structure specified above, with no markdown code block delimiters
+

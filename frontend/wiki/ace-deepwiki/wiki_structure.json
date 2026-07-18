@@ -1,0 +1,206 @@
+{
+    "title": "ACE DeepWiki 知识库",
+    "description": "ACE DeepWiki 是一个基于大语言模型（LLM）的自动研究工具，用于构建项目知识库。它能够分析代码库并生成结构化的Wiki文档。",
+    "sections": [
+        {
+            "id": "overview",
+            "title": "概述",
+            "pages": ["project-intro", "quick-start"],
+            "subsections": []
+        },
+        {
+            "id": "system-architecture",
+            "title": "系统架构",
+            "pages": ["architecture-overview", "component-relations"],
+            "subsections": []
+        },
+        {
+            "id": "core-features",
+            "title": "核心功能",
+            "pages": ["auto-research", "knowledge-generation"],
+            "subsections": []
+        },
+        {
+            "id": "data-management",
+            "title": "数据管理",
+            "pages": ["state-management", "data-flow"],
+            "subsections": []
+        },
+        {
+            "id": "frontend",
+            "title": "前端组件",
+            "pages": ["frontend-overview", "wiki-ui"],
+            "subsections": []
+        },
+        {
+            "id": "backend",
+            "title": "后端系统",
+            "pages": ["agent-system", "tool-framework"],
+            "subsections": []
+        },
+        {
+            "id": "model-integration",
+            "title": "模型集成",
+            "pages": ["llm-integration", "prompt-engineering"],
+            "subsections": []
+        },
+        {
+            "id": "deployment",
+            "title": "部署与基础设施",
+            "pages": ["deployment-guide"],
+            "subsections": []
+        },
+        {
+            "id": "extensibility",
+            "title": "扩展与定制",
+            "pages": ["customization"],
+            "subsections": []
+        }
+    ],
+    "pages": [
+        {
+            "id": "project-intro",
+            "title": "项目介绍",
+            "description": "项目的整体目标、主要功能和适用场景",
+            "importance": "high",
+            "relevant_files": ["./README.md"],
+            "related_pages": ["quick-start"],
+            "parent_section": "overview"
+        },
+        {
+            "id": "quick-start",
+            "title": "快速开始",
+            "description": "安装指南和基础配置说明",
+            "importance": "high",
+            "relevant_files": ["./requirements.txt", "./.env.example"],
+            "related_pages": ["project-intro"],
+            "parent_section": "overview"
+        },
+        {
+            "id": "architecture-overview",
+            "title": "架构总览",
+            "description": "系统整体架构设计图及模块划分",
+            "importance": "high",
+            "relevant_files": ["./main.py", "./backend/model/deep_wiki.py"],
+            "related_pages": ["component-relations"],
+            "parent_section": "system-architecture"
+        },
+        {
+            "id": "component-relations",
+            "title": "组件关系",
+            "description": "各模块间的交互关系和数据流向",
+            "importance": "high",
+            "relevant_files": ["./backend/model/state.py", "./backend/tools/react_tools.py"],
+            "related_pages": ["architecture-overview"],
+            "parent_section": "system-architecture"
+        },
+        {
+            "id": "auto-research",
+            "title": "自动研究流程",
+            "description": "自动研究功能的工作流程和核心算法",
+            "importance": "high",
+            "relevant_files": ["./backend/agent/researcher.py"],
+            "related_pages": ["knowledge-generation"],
+            "parent_section": "core-features"
+        },
+        {
+            "id": "knowledge-generation",
+            "title": "知识生成机制",
+            "description": "如何从代码生成结构化知识",
+            "importance": "high",
+            "relevant_files": ["./backend/prompts/wiki_structure.jinja-md", "./backend/prompts/wiki_page.jinja-md"],
+            "related_pages": ["auto-research"],
+            "parent_section": "core-features"
+        },
+        {
+            "id": "state-management",
+            "title": "状态管理",
+            "description": "系统状态机的设计与实现",
+            "importance": "medium",
+            "relevant_files": ["./backend/model/state.py", "./backend/model/todo_list.py"],
+            "related_pages": ["data-flow"],
+            "parent_section": "data-management"
+        },
+        {
+            "id": "data-flow",
+            "title": "数据流设计",
+            "description": "系统内部数据处理流程",
+            "importance": "medium",
+            "relevant_files": ["./backend/model/notepad.py", "./backend/tools/code_rag_tools.py"],
+            "related_pages": ["state-management"],
+            "parent_section": "data-management"
+        },
+        {
+            "id": "frontend-overview",
+            "title": "前端架构",
+            "description": "前端技术栈和整体结构",
+            "importance": "medium",
+            "relevant_files": ["./frontend/server.js", "./frontend/views/index.ejs"],
+            "related_pages": ["wiki-ui"],
+            "parent_section": "frontend"
+        },
+        {
+            "id": "wiki-ui",
+            "title": "Wiki界面组件",
+            "description": "知识库展示页面的UI设计",
+            "importance": "medium",
+            "relevant_files": ["./frontend/views/page.ejs", "./frontend/views/project.ejs"],
+            "related_pages": ["frontend-overview"],
+            "parent_section": "frontend"
+        },
+        {
+            "id": "agent-system",
+            "title": "代理系统",
+            "description": "研究代理的工作机制",
+            "importance": "high",
+            "relevant_files": ["./backend/agent/researcher.py"],
+            "related_pages": ["tool-framework"],
+            "parent_section": "backend"
+        },
+        {
+            "id": "tool-framework",
+            "title": "工具框架",
+            "description": "代码分析工具的扩展机制",
+            "importance": "medium",
+            "relevant_files": ["./backend/tools/__init__.py", "./backend/tools/react_tools.py"],
+            "related_pages": ["agent-system"],
+            "parent_section": "backend"
+        },
+        {
+            "id": "llm-integration",
+            "title": "LLM集成",
+            "description": "大语言模型的接入方式",
+            "importance": "high",
+            "relevant_files": ["./backend/llm/chat_model.py"],
+            "related_pages": ["prompt-engineering"],
+            "parent_section": "model-integration"
+        },
+        {
+            "id": "prompt-engineering",
+            "title": "提示工程",
+            "description": "提示模板的设计和使用",
+            "importance": "medium",
+            "relevant_files": ["./backend/prompts/prompt_template.py", "./backend/prompts/researcher.jinja-md"],
+            "related_pages": ["llm-integration"],
+            "parent_section": "model-integration"
+        },
+        {
+            "id": "deployment-guide",
+            "title": "部署指南",
+            "description": "系统部署和运行环境配置",
+            "importance": "high",
+            "relevant_files": ["./package.json", "./package-lock.json"],
+            "related_pages": [],
+            "parent_section": "deployment"
+        },
+        {
+            "id": "customization",
+            "title": "定制扩展",
+            "description": "如何扩展系统功能和定制提示",
+            "importance": "medium",
+            "relevant_files": ["./backend/prompts/", "./backend/tools/code_rag_tools.py"],
+            "related_pages": [],
+            "parent_section": "extensibility"
+        }
+    ]
+}

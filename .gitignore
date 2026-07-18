@@ -1,0 +1,40 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+**/secrets.json
+
+# Virtual environments
+.venv
+
+# LangGraph
+.langgraph_api
+
+# Logs
+/.threads
+
+.idea/
+.DS_Store
+*.tsbuildinfo
+notepad.md
+todo.md
+
+output/
+
+node_modules/
+frontend/dist/
+data/
+.venv-paper/
+*.db
+desktop_build/
+desktop_dist/
+.pyinstaller-cache/
+.venv-desktop/
