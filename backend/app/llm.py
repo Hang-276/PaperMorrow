@@ -41,8 +41,8 @@ English title: {title}
 English abstract: {abstract}
 
 Return a JSON object with these exact keys:
-title_zh, abstract_zh, one_sentence, research_problem, method, innovations (array), value (array), evidence, limitations (array), recommended_for (array).
-The English title must not be modified or omitted by the application."""
+title_zh, abstract_zh, one_sentence, research_problem, method, innovations (array), value (array), evidence, limitations (array), recommended_for (array), analysis_scope, evidence_items.
+analysis_scope must be "abstract". evidence_items must contain only claims supported by the supplied abstract, with field_name (research_problem/method/innovation/experiment_conclusion/limitation), claim, page_number (always null), section ("Abstract"), evidence_excerpt (a short exact excerpt from the abstract), source_scope ("abstract"), and conclusion_type (paper_fact/author_claim/ai_judgment). Never invent page numbers or full-text evidence. The English title must not be modified or omitted by the application."""
         if self.provider == "claude":
             return await self._claude(prompt, "analysis")
         return await self._openai_compatible(prompt, "analysis")

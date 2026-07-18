@@ -15,7 +15,7 @@ from backend.agent.researcher import create_researcher, _requested_final_answer
 from backend.app.catalog import detect_venue
 from backend.app.deepwiki_service import _fallback_page, _generate_llm_wiki, _generate_original_wiki, _generate_wiki, _valid_page_content, _write_wiki, validate_repository_url, wiki_is_full_deepwiki
 from backend.app.main import app
-from backend.app.database import SessionLocal
+from backend.app.database import SessionLocal, init_db
 from backend.app.models import ChatSession, DomainPack, LibraryEntry, LibraryFolder, LibraryTag, LocalPaperFile, Paper, PaperNote, RecommendationAssessment, RecommendationBatch, ResearchProfile, ResearchStudy, Tag, TokenUsage
 from backend.app.library_folder_service import LibraryFolderService
 from backend.app.research_service import ResearchService
@@ -41,6 +41,11 @@ from backend.model.todo_list import TodoList
 from backend.model.state import TokenCounter
 from backend.workspace import Project
 from backend.tools.code_rag_tools import search_in_folders as search_in_folders_tool
+
+
+@pytest.fixture(scope="session", autouse=True)
+def initialize_database_schema():
+    init_db()
 
 
 def test_title_normalization_and_identity_are_stable():
@@ -984,4 +989,38 @@ def test_research_project_workflow_and_fts_are_project_scoped():
             if project: db.delete(project)
         paper = db.get(Paper, paper_id)
         if paper: db.delete(paper)
+        db.commit(); db.close()
+
+
+def test_evidence_scope_and_conservative_version_actions():
+    from backend.app.evidence_service import link_versions, match_paper_versions, split_version, undo_last_version_action, work_timeline
+    from backend.app.models import PaperWork
+    marker = uuid.uuid4().hex[:10]
+    db = SessionLocal()
+    first = Paper(title_en=f"Versioned Agent Study {marker}", abstract_en="First abstract evidence.", authors_json='["A", "B"]', primary_url=f"https://arxiv.org/abs/{marker}v1", arxiv_id=f"{marker}v1", identity_hash=uuid.uuid4().hex)
+    second = Paper(title_en=f"Versioned Agent Study {marker}", abstract_en="Extended evidence.", authors_json='["A", "B"]', primary_url=f"https://arxiv.org/abs/{marker}v2", arxiv_id=f"{marker}v2", identity_hash=uuid.uuid4().hex)
+    unrelated = Paper(title_en=f"Unrelated Chemistry {marker}", abstract_en="Other work.", authors_json='["C"]', primary_url=f"https://example.com/{marker}", identity_hash=uuid.uuid4().hex)
+    db.add_all([first, second, unrelated]); db.commit(); ids=[first.id,second.id,unrelated.id]
+    try:
+        confidence, reason = match_paper_versions(first, second)
+        assert confidence == .99 and "arXiv" in reason
+        assert match_paper_versions(first, unrelated)[0] < .75
+        linked = link_versions(db, first, second)
+        assert linked.confirmed is True
+        assert len(work_timeline(db, first)["versions"]) == 2
+        split_version(db, second); assert second.work_version.work_id != first.work_version.work_id
+        undo_last_version_action(db, second); assert second.work_version.work_id == first.work_version.work_id
+        db.commit()
+        with TestClient(app) as client:
+            invalid = client.put(f"/api/papers/{first.id}/evidence", json={"source_scope":"abstract","items":[{"field_name":"method","claim":"claim","page_number":2,"evidence_excerpt":"evidence"}]})
+            assert invalid.status_code == 422
+            valid = client.put(f"/api/papers/{first.id}/evidence", json={"source_scope":"abstract","items":[{"field_name":"method","claim":"claim","evidence_excerpt":"First abstract evidence.","conclusion_type":"author_claim"}]})
+            assert valid.status_code == 200
+            body=valid.json(); assert body["scope_label"] == "仅摘要分析" and body["items"][0]["page_number"] is None
+    finally:
+        for paper_id in ids:
+            paper=db.get(Paper,paper_id)
+            if paper: db.delete(paper)
+        db.commit()
+        for work in db.query(PaperWork).filter(PaperWork.canonical_title.like(f"%{marker}%")).all(): db.delete(work)
         db.commit(); db.close()

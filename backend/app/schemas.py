@@ -215,6 +215,33 @@ class ResearchProjectChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
 
 
+class PaperEvidenceItem(BaseModel):
+    field_name: Literal["research_problem", "method", "innovation", "experiment_conclusion", "limitation"]
+    claim: str = Field(min_length=1, max_length=20_000)
+    page_number: int | None = Field(default=None, ge=1, le=100_000)
+    section: str | None = Field(default=None, max_length=500)
+    evidence_excerpt: str = Field(default="", max_length=1000)
+    conclusion_type: Literal["paper_fact", "author_claim", "ai_judgment"] = "paper_fact"
+
+
+class PaperEvidenceUpdate(BaseModel):
+    source_scope: Literal["full_text", "abstract", "author_statement"]
+    items: list[PaperEvidenceItem] = Field(default_factory=list, max_length=200)
+
+    @field_validator("items")
+    @classmethod
+    def abstract_has_no_pages(cls, value: list[PaperEvidenceItem], info):
+        if info.data.get("source_scope") == "abstract" and any(item.page_number for item in value):
+            raise ValueError("仅摘要分析不能填写页码")
+        return value
+
+
+class PaperVersionLinkRequest(BaseModel):
+    target_paper_id: int
+    crossref_related: bool = False
+    user_confirmed: bool = False
+
+
 class ReaderTranslateRequest(BaseModel):
     text: str = Field(min_length=1, max_length=20_000)
     page: int | None = Field(default=None, ge=1, le=1000)

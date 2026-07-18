@@ -25,7 +25,7 @@ from .recommendation import RecommendationService
 from .repository_service import RepositoryService
 from .scheduler import sync_scheduler
 from .reader_service import cached_pdf_path, reader_figure_path, save_reader_figure
-from .schemas import ChatSessionCreate, DomainPackCreate, DomainPackUpdate, DomainSearchPreviewRequest, DomainSourceTestRequest, GenerateRequest, LibraryFolderCreate, LibraryImportRequest, LibraryPaperFoldersRequest, LibraryPaperTagsRequest, LibraryScanRequest, LibraryTagCreate, LibraryTagUpdate, LLMProfileCreate, LLMProfileUpdate, NoteRequest, PaperChatRequest, ReaderFigureRequest, ReaderTranslateRequest, RepositoryBindRequest, ResearchProfileCreate, ResearchProfileUpdate, ResearchProjectChatRequest, ResearchProjectCreate, ResearchProjectNoteCreate, ResearchProjectPaperRequest, ResearchProjectPaperUpdate, ResearchProjectSearchRequest, ResearchProjectUpdate, ResearchStudyCreate, SettingsUpdate, StudyStateRequest
+from .schemas import ChatSessionCreate, DomainPackCreate, DomainPackUpdate, DomainSearchPreviewRequest, DomainSourceTestRequest, GenerateRequest, LibraryFolderCreate, LibraryImportRequest, LibraryPaperFoldersRequest, LibraryPaperTagsRequest, LibraryScanRequest, LibraryTagCreate, LibraryTagUpdate, LLMProfileCreate, LLMProfileUpdate, NoteRequest, PaperChatRequest, PaperEvidenceUpdate, PaperVersionLinkRequest, ReaderFigureRequest, ReaderTranslateRequest, RepositoryBindRequest, ResearchProfileCreate, ResearchProfileUpdate, ResearchProjectChatRequest, ResearchProjectCreate, ResearchProjectNoteCreate, ResearchProjectPaperRequest, ResearchProjectPaperUpdate, ResearchProjectSearchRequest, ResearchProjectUpdate, ResearchStudyCreate, SettingsUpdate, StudyStateRequest
 from .serializers import batch_dict, job_dict, library_tag_dict, paper_dict, research_profile_dict, tag_dict
 from .settings_service import delete_llm_profile_key, get_active_llm_profile, get_settings, list_llm_profiles, llm_profile_dict, save_llm_profile_key, save_secrets, update_settings
 from .usage_service import token_usage_stats
@@ -33,6 +33,7 @@ from .database import get_db
 from .zotero_service import ZoteroError, ZoteroService
 from .research_service import ResearchService, research_study_dict
 from .project_service import PAPER_ROLES, READING_STATUSES, add_project_paper, load_project, project_dict, reindex_project, save_chat, search_project
+from .evidence_service import evidence_dict, link_versions, replace_analysis_evidence, split_version, undo_last_version_action, work_timeline
 
 
 router = APIRouter(prefix="/api")
@@ -625,6 +626,64 @@ async def retry_ai(paper_id: int, db: Session = Depends(get_db)) -> dict[str, An
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return paper_dict(paper)
+
+
+@router.get("/papers/{paper_id}/evidence")
+def get_paper_evidence(paper_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    paper = _paper_or_404(db, paper_id)
+    items = [evidence_dict(item) for item in paper.analysis_evidence]
+    scope = items[0]["source_scope"] if items else ("full_text" if paper.document and paper.document.full_text else "abstract")
+    return {"paper_id": paper.id, "analysis_scope": scope, "scope_label": "全文分析" if scope == "full_text" else "仅摘要分析", "items": items}
+
+
+@router.put("/papers/{paper_id}/evidence")
+def update_paper_evidence(paper_id: int, payload: PaperEvidenceUpdate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    paper = _paper_or_404(db, paper_id)
+    if payload.source_scope == "abstract" and any(item.page_number for item in payload.items):
+        raise HTTPException(status_code=400, detail="仅摘要分析不能伪造页码")
+    replace_analysis_evidence(db, paper, [item.model_dump() for item in payload.items], payload.source_scope)
+    db.commit()
+    return get_paper_evidence(paper_id, db)
+
+
+@router.get("/papers/{paper_id}/versions")
+def get_paper_versions(paper_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    timeline = work_timeline(db, _paper_or_404(db, paper_id)); db.commit()
+    return timeline
+
+
+@router.post("/papers/{paper_id}/versions/link")
+def link_paper_version(paper_id: int, payload: PaperVersionLinkRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+    source, target = _paper_or_404(db, paper_id), _paper_or_404(db, payload.target_paper_id)
+    try:
+        link_versions(db, source, target, payload.crossref_related, payload.user_confirmed); db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return work_timeline(db, source)
+
+
+@router.post("/papers/{paper_id}/versions/confirm")
+def confirm_paper_version(paper_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    paper = _paper_or_404(db, paper_id)
+    version = work_timeline(db, paper)
+    paper.work_version.confirmed = True; db.commit()
+    return work_timeline(db, paper)
+
+
+@router.post("/papers/{paper_id}/versions/split")
+def split_paper_work(paper_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    paper = _paper_or_404(db, paper_id); split_version(db, paper); db.commit()
+    return work_timeline(db, paper)
+
+
+@router.post("/papers/{paper_id}/versions/undo")
+def undo_paper_work_action(paper_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    paper = _paper_or_404(db, paper_id)
+    try:
+        undo_last_version_action(db, paper); db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return work_timeline(db, paper)
 
 
 @router.get("/papers/{paper_id}/related")

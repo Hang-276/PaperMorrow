@@ -123,9 +123,30 @@ def _migration_002_research_projects(connection) -> None:
     """))
 
 
+def _migration_003_paper_evidence_versions(connection) -> None:
+    connection.execute(text("CREATE TABLE IF NOT EXISTS paper_works (id INTEGER PRIMARY KEY, canonical_title TEXT NOT NULL, created_at DATETIME NOT NULL)"))
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS paper_versions (
+        id INTEGER PRIMARY KEY, work_id INTEGER NOT NULL REFERENCES paper_works(id) ON DELETE CASCADE,
+        paper_id INTEGER NOT NULL UNIQUE REFERENCES papers(id) ON DELETE CASCADE, version_label VARCHAR(160) NOT NULL DEFAULT '原始版本',
+        relation_type VARCHAR(32) NOT NULL DEFAULT 'same_work', confidence FLOAT NOT NULL DEFAULT 1,
+        confirmed BOOLEAN NOT NULL DEFAULT 1, match_reason TEXT NOT NULL DEFAULT '', important_changes TEXT NOT NULL DEFAULT '',
+        version_date DATETIME, created_at DATETIME NOT NULL)"""))
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS paper_merge_audits (
+        id INTEGER PRIMARY KEY, paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+        from_work_id INTEGER, to_work_id INTEGER, action VARCHAR(24) NOT NULL, snapshot_json TEXT NOT NULL DEFAULT '{}', created_at DATETIME NOT NULL)"""))
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS paper_analysis_evidence (
+        id INTEGER PRIMARY KEY, paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+        field_name VARCHAR(80) NOT NULL, claim TEXT NOT NULL, page_number INTEGER, section VARCHAR(500),
+        evidence_excerpt TEXT NOT NULL DEFAULT '', source_scope VARCHAR(24) NOT NULL DEFAULT 'abstract',
+        conclusion_type VARCHAR(24) NOT NULL DEFAULT 'paper_fact', created_at DATETIME NOT NULL)"""))
+    connection.execute(text("CREATE INDEX IF NOT EXISTS ix_paper_versions_work ON paper_versions(work_id)"))
+    connection.execute(text("CREATE INDEX IF NOT EXISTS ix_paper_analysis_evidence_paper ON paper_analysis_evidence(paper_id)"))
+
+
 MIGRATIONS = [
     ("001_domain_packs", _migration_001_domain_packs),
     ("002_research_projects", _migration_002_research_projects),
+    ("003_paper_evidence_versions", _migration_003_paper_evidence_versions),
 ]
 
 

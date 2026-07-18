@@ -6,6 +6,7 @@ from typing import Any
 from .catalog import tag_domain
 from .models import DeepWikiJob, LibraryTag, Paper, Recommendation, RecommendationBatch, ResearchProfile, Tag
 from .zotero_service import zotero_link_dict
+from .evidence_service import evidence_dict
 
 
 def tag_dict(tag: Tag) -> dict[str, Any]:
@@ -52,6 +53,9 @@ def paper_dict(paper: Paper, score: float | None = None, recommended_at: Any = N
         "pdf_url": paper.pdf_url,
         "source": paper.source,
         "summary": summary,
+        "analysis_scope": paper.analysis_evidence[0].source_scope if paper.analysis_evidence else ("abstract" if summary else None),
+        "analysis_evidence": [evidence_dict(item) for item in paper.analysis_evidence],
+        "work_version": {"work_id": paper.work_version.work_id, "version_label": paper.work_version.version_label, "confidence": paper.work_version.confidence, "confirmed": paper.work_version.confirmed} if paper.work_version else None,
         "ai_status": paper.ai_status,
         "repository_url": paper.repository_url,
         "repository_status": paper.repository_status,

@@ -27,6 +27,7 @@ from .recommendation_pipeline import (
     identity_hash,
     normalize_title,
 )
+from .evidence_service import replace_analysis_evidence
 from .settings_service import get_settings
 
 
@@ -278,6 +279,7 @@ class RecommendationService:
             paper.title_zh = result.get("title_zh")
             paper.abstract_zh = result.get("abstract_zh")
             paper.summary_json = json.dumps(result, ensure_ascii=False)
+            replace_analysis_evidence(self.db, paper, result.get("evidence_items") or [], "abstract")
             paper.ai_status = "completed"
         self.db.commit()
 
@@ -359,6 +361,7 @@ class RecommendationService:
         paper.title_zh = result.get("title_zh")
         paper.abstract_zh = result.get("abstract_zh")
         paper.summary_json = json.dumps(result, ensure_ascii=False)
+        replace_analysis_evidence(self.db, paper, result.get("evidence_items") or [], "abstract")
         paper.ai_status = "completed"
         self.db.commit()
         return paper

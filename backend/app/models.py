@@ -71,6 +71,8 @@ class Paper(Base):
     local_files: Mapped[list["LocalPaperFile"]] = relationship(back_populates="paper", cascade="all, delete-orphan")
     research_results: Mapped[list["ResearchStudyPaper"]] = relationship(back_populates="paper", cascade="all, delete-orphan")
     zotero_link: Mapped["ZoteroLink | None"] = relationship(back_populates="paper", uselist=False, cascade="all, delete-orphan")
+    work_version: Mapped["PaperVersion | None"] = relationship(back_populates="paper", uselist=False, cascade="all, delete-orphan")
+    analysis_evidence: Mapped[list["PaperAnalysisEvidence"]] = relationship(back_populates="paper", cascade="all, delete-orphan")
 
 
 class Tag(Base):
@@ -533,3 +535,59 @@ class ProjectChatMessage(Base):
     content: Mapped[str] = mapped_column(Text)
     sources_json: Mapped[str] = mapped_column(Text, default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PaperWork(Base):
+    __tablename__ = "paper_works"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    canonical_title: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    versions: Mapped[list["PaperVersion"]] = relationship(back_populates="work", cascade="all, delete-orphan", order_by="PaperVersion.version_date")
+
+
+class PaperVersion(Base):
+    __tablename__ = "paper_versions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    work_id: Mapped[int] = mapped_column(ForeignKey("paper_works.id", ondelete="CASCADE"), index=True)
+    paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), unique=True, index=True)
+    version_label: Mapped[str] = mapped_column(String(160), default="原始版本")
+    relation_type: Mapped[str] = mapped_column(String(32), default="same_work")
+    confidence: Mapped[float] = mapped_column(Float, default=1.0)
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=True)
+    match_reason: Mapped[str] = mapped_column(Text, default="")
+    important_changes: Mapped[str] = mapped_column(Text, default="")
+    version_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    work: Mapped[PaperWork] = relationship(back_populates="versions")
+    paper: Mapped[Paper] = relationship(back_populates="work_version")
+
+
+class PaperMergeAudit(Base):
+    __tablename__ = "paper_merge_audits"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), index=True)
+    from_work_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    to_work_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    action: Mapped[str] = mapped_column(String(24))
+    snapshot_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PaperAnalysisEvidence(Base):
+    __tablename__ = "paper_analysis_evidence"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), index=True)
+    field_name: Mapped[str] = mapped_column(String(80))
+    claim: Mapped[str] = mapped_column(Text)
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    section: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    evidence_excerpt: Mapped[str] = mapped_column(Text, default="")
+    source_scope: Mapped[str] = mapped_column(String(24), default="abstract")
+    conclusion_type: Mapped[str] = mapped_column(String(24), default="paper_fact")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    paper: Mapped[Paper] = relationship(back_populates="analysis_evidence")

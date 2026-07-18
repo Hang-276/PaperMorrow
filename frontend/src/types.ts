@@ -79,6 +79,9 @@ export type Paper = {
   primary_url: string
   pdf_url?: string | null
   summary?: Summary | null
+  analysis_scope?: 'abstract'|'full_text'|'author_statement'|null
+  analysis_evidence?: {id:number;field_name:string;claim:string;page_number?:number|null;section?:string|null;evidence_excerpt:string;source_scope:string;conclusion_type:string}[]
+  work_version?: {work_id:number;version_label:string;confidence:number;confirmed:boolean}|null
   ai_status: string
   repository_url?: string | null
   repository_status: string
