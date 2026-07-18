@@ -1,0 +1,75 @@
+# -*- mode: python ; coding: utf-8 -*-
+from pathlib import Path
+import platform
+
+from PyInstaller.utils.hooks import collect_submodules
+
+ROOT = Path(SPECPATH).resolve().parent
+SYSTEM = platform.system()
+ICON = ROOT / "desktop" / "icons" / ("PaperMorrow.icns" if SYSTEM == "Darwin" else "PaperMorrow.ico")
+
+hiddenimports = (
+    collect_submodules("backend")
+    + collect_submodules("webview")
+    + [
+        "uvicorn.logging",
+        "uvicorn.loops.auto",
+        "uvicorn.protocols.http.auto",
+        "uvicorn.protocols.websockets.auto",
+        "uvicorn.lifespan.on",
+    ]
+)
+
+a = Analysis(
+    [str(ROOT / "desktop_app.py")],
+    pathex=[str(ROOT)],
+    binaries=[],
+    datas=[
+        (str(ROOT / "frontend" / "dist"), "frontend/dist"),
+        (str(ROOT / "backend" / "prompts"), "backend/prompts"),
+    ],
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=["tkinter", "matplotlib", "notebook", "IPython"],
+    noarchive=False,
+    optimize=1,
+)
+pyz = PYZ(a.pure)
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name="PaperMorrow",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=False,
+    icon=str(ICON),
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name="PaperMorrow",
+)
+
+if SYSTEM == "Darwin":
+    app = BUNDLE(
+        coll,
+        name="PaperMorrow.app",
+        icon=str(ICON),
+        bundle_identifier="io.papermorrow.desktop",
+        info_plist={
+            "NSHighResolutionCapable": True,
+            "LSMinimumSystemVersion": "12.0",
+            "CFBundleShortVersionString": "0.3.0",
+            "CFBundleVersion": "0.3.0",
+        },
+    )

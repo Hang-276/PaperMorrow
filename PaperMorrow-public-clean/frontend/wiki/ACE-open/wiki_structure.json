@@ -1,0 +1,236 @@
+{
+    "title": "ACE框架知识库",
+    "description": "Agentic Context Engineering (ACE)框架的知识库，包含架构、功能、部署等详细信息，帮助用户理解和使用ACE框架进行实验与扩展。",
+    "sections": [
+        {
+            "id": "section-overview",
+            "title": "概述",
+            "pages": [
+                "page-project-intro",
+                "page-repo-layout"
+            ],
+            "subsections": []
+        },
+        {
+            "id": "section-architecture",
+            "title": "系统架构",
+            "pages": [
+                "page-core-components",
+                "page-roles-interaction"
+            ],
+            "subsections": []
+        },
+        {
+            "id": "section-core-features",
+            "title": "核心功能",
+            "pages": [
+                "page-offline-adaptation",
+                "page-online-adaptation"
+            ],
+            "subsections": []
+        },
+        {
+            "id": "section-data-management",
+            "title": "数据管理",
+            "pages": [
+                "page-playbook-structure",
+                "page-delta-operations"
+            ],
+            "subsections": []
+        },
+        {
+            "id": "section-model-integration",
+            "title": "模型集成",
+            "pages": [
+                "page-llm-client",
+                "page-prompt-customization"
+            ],
+            "subsections": []
+        },
+        {
+            "id": "section-deployment",
+            "title": "部署与基础设施",
+            "pages": [
+                "page-local-deployment"
+            ],
+            "subsections": []
+        },
+        {
+            "id": "section-extensibility",
+            "title": "扩展性与定制化",
+            "pages": [
+                "page-custom-env"
+            ],
+            "subsections": []
+        }
+    ],
+    "pages": [
+        {
+            "id": "page-project-intro",
+            "title": "项目简介",
+            "description": "ACE框架的核心目标、背景及主要功能概述",
+            "importance": "high",
+            "relevant_files": [
+                "./README.md"
+            ],
+            "related_pages": [
+                "page-core-components",
+                "page-repo-layout"
+            ],
+            "parent_section": "section-overview"
+        },
+        {
+            "id": "page-repo-layout",
+            "title": "仓库结构",
+            "description": "ACE仓库的目录结构及关键文件说明",
+            "importance": "medium",
+            "relevant_files": [
+                "./README.md"
+            ],
+            "related_pages": [
+                "page-project-intro"
+            ],
+            "parent_section": "section-overview"
+        },
+        {
+            "id": "page-core-components",
+            "title": "核心组件架构",
+            "description": "ACE框架主要组件（Playbook、Generator、Reflector、Curator、Adapter等）的关系图",
+            "importance": "high",
+            "relevant_files": [
+                "./ace/__init__.py",
+                "./ace/adaptation.py",
+                "./ace/roles.py"
+            ],
+            "related_pages": [
+                "page-roles-interaction",
+                "page-offline-adaptation"
+            ],
+            "parent_section": "section-architecture"
+        },
+        {
+            "id": "page-roles-interaction",
+            "title": "智能体角色交互流程",
+            "description": "Generator、Reflector、Curator三个角色之间的协作流程示意图",
+            "importance": "high",
+            "relevant_files": [
+                "./ace/roles.py",
+                "./ace/adaptation.py"
+            ],
+            "related_pages": [
+                "page-core-components",
+                "page-offline-adaptation"
+            ],
+            "parent_section": "section-architecture"
+        },
+        {
+            "id": "page-offline-adaptation",
+            "title": "离线适应循环",
+            "description": "离线环境下Playbook迭代优化的工作流程",
+            "importance": "high",
+            "relevant_files": [
+                "./ace/adaptation.py",
+                "./scripts/run_local_adapter.py"
+            ],
+            "related_pages": [
+                "page-online-adaptation",
+                "page-core-components"
+            ],
+            "parent_section": "section-core-features"
+        },
+        {
+            "id": "page-online-adaptation",
+            "title": "在线适应循环",
+            "description": "在线环境下基于实时反馈的Playbook更新流程",
+            "importance": "high",
+            "relevant_files": [
+                "./ace/adaptation.py"
+            ],
+            "related_pages": [
+                "page-offline-adaptation",
+                "page-core-components"
+            ],
+            "parent_section": "section-core-features"
+        },
+        {
+            "id": "page-playbook-structure",
+            "title": "Playbook数据结构",
+            "description": "Playbook的内部结构及存储格式说明",
+            "importance": "medium",
+            "relevant_files": [
+                "./ace/playbook.py"
+            ],
+            "related_pages": [
+                "page-delta-operations"
+            ],
+            "parent_section": "section-data-management"
+        },
+        {
+            "id": "page-delta-operations",
+            "title": "Delta操作机制",
+            "description": "Playbook更新的Delta操作类型及应用场景",
+            "importance": "medium",
+            "relevant_files": [
+                "./ace/delta.py"
+            ],
+            "related_pages": [
+                "page-playbook-structure",
+                "page-offline-adaptation"
+            ],
+            "parent_section": "section-data-management"
+        },
+        {
+            "id": "page-llm-client",
+            "title": "LLM客户端集成",
+            "description": "如何集成不同的LLM客户端（如OpenAI、Transformers）",
+            "importance": "high",
+            "relevant_files": [
+                "./ace/llm.py",
+                "./scripts/run_local_adapter.py"
+            ],
+            "related_pages": [
+                "page-prompt-customization"
+            ],
+            "parent_section": "section-model-integration"
+        },
+        {
+            "id": "page-prompt-customization",
+            "title": "Prompt定制指南",
+            "description": "针对特定任务定制Generator、Reflector、Curator的Prompt模板",
+            "importance": "medium",
+            "relevant_files": [
+                "./ace/prompts.py"
+            ],
+            "related_pages": [
+                "page-llm-client"
+            ],
+            "parent_section": "section-model-integration"
+        },
+        {
+            "id": "page-custom-env",
+            "title": "自定义任务环境",
+            "description": "如何实现自定义的TaskEnvironment以支持特定任务",
+            "importance": "medium",
+            "relevant_files": [
+                "./ace/adaptation.py",
+                "./README.md"
+            ],
+            "related_pages": [
+            ],
+            "parent_section": "section-extensibility"
+        },
+        {
+            "id": "page-local-deployment",
+            "title": "本地部署指南",
+            "description": "在本地环境中运行ACE框架的步骤及依赖配置",
+            "importance": "high",
+            "relevant_files": [
+                "./README.md",
+                "./scripts/run_local_adapter.py"
+            ],
+            "related_pages": [
+            ],
+            "parent_section": "section-deployment"
+        }
+    ]
+}

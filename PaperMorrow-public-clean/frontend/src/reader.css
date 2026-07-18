@@ -1,0 +1,7 @@
+.reader-page-placeholder {
+  display: grid;
+  place-items: center;
+  background: #f4f4f4;
+  color: #aaa;
+  font-size:0.625rem;
+}

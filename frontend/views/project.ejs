@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= structure.title %> - Wiki</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1><a href="/">Wiki</a> / <%= structure.title %></h1>
+      <p class="description"><%= structure.description %></p>
+    </header>
+    <main>
+      <div class="sections">
+        <% structure.sections.forEach(section => { %>
+          <section>
+            <h2><%= section.title %></h2>
+            <ul class="page-list">
+              <% section.pages.forEach(pageId => { %>
+                <% const pageInfo = structure.pages.find(p => p.id === pageId); %>
+                <li>
+                  <a href="/<%= project %>/page/<%= pageId %>">
+                    <%= pageInfo ? pageInfo.title : pageId %>
+                  </a>
+                  <% if (pageInfo && pageInfo.importance) { %>
+                    <span class="importance importance-<%= pageInfo.importance %>">
+                      <%= pageInfo.importance === 'high' ? '高' : pageInfo.importance === 'medium' ? '中' : '低' %>
+                    </span>
+                  <% } %>
+                  <% if (pageInfo && pageInfo.description) { %>
+                    <p class="page-description"><%= pageInfo.description %></p>
+                  <% } %>
+                </li>
+              <% }); %>
+            </ul>
+          </section>
+        <% }); %>
+      </div>
+    </main>
+    <footer>
+      <p>&copy; 2023 Wiki Markdown Renderer</p>
+    </footer>
+  </div>
+</body>
+</html>
