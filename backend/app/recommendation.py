@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import math
 import re
@@ -13,21 +12,26 @@ from sqlalchemy.orm import Session
 
 from .catalog import detect_venue, domain_categories, tag_domain
 from .llm import LLMClient
-from .models import LibraryEntry, Paper, PaperStudyState, Recommendation, RecommendationAssessment, RecommendationBatch, RecommendationContext, RecommendationMatch, ResearchProfile, ResearchStudyPaper, Tag
+from .models import Paper, PaperStudyState, Recommendation, RecommendationAssessment, RecommendationBatch, RecommendationContext, RecommendationMatch, ResearchProfile, Tag
 from .paper_sources import ArxivSource, PaperCandidate, SemanticScholarSource
+from .recommendation_pipeline import (
+    ArxivCandidateSource,
+    CallbackReranker,
+    DefaultFeatureProvider,
+    DefaultSelector,
+    PermanentCandidateFilter,
+    RecommendationContext as PipelineContext,
+    RecommendationRequest,
+    RuleRanker,
+    RankedCandidate,
+    identity_hash,
+    normalize_title,
+)
+from .evidence_service import replace_analysis_evidence
 from .settings_service import get_settings
 
 
 STOP_WORDS = {"the", "and", "for", "with", "from", "that", "this", "into", "using", "based", "study", "research", "model", "models", "paper", "method"}
-
-
-def normalize_title(title: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()
-
-
-def identity_hash(candidate: PaperCandidate) -> str:
-    identity = candidate.doi or candidate.arxiv_id or normalize_title(candidate.title)
-    return hashlib.sha256(identity.lower().encode("utf-8")).hexdigest()
 
 
 class RecommendationService:
@@ -92,16 +96,16 @@ class RecommendationService:
                     exclusions = list(dict.fromkeys([*exclusions, *expansion.get("exclusions", [])]))[:20]
                 except Exception:
                     pass
+        source = ArxivCandidateSource(self.arxiv)
         try:
-            if profile and mode != "broad":
-                focused, broad = await asyncio.gather(
-                    self.arxiv.fetch(categories, profile_keywords or [profile.name], max(60, count * 15)),
-                    self.arxiv.fetch(categories, [], max(40, count * 8)),
-                )
-                by_id = {item.arxiv_id: item for item in [*focused, *broad]}
-                candidates = list(by_id.values())
-            else:
-                candidates = await self.arxiv.fetch(categories, keywords, max(60, count * 15))
+            candidates = await source.collect(RecommendationRequest(
+                categories=categories,
+                keywords=keywords,
+                count=count,
+                mode=mode,
+                profile_name=profile.name if profile else None,
+                focused_keywords=profile_keywords,
+            ))
         except Exception as exc:
             batch.status = "failed"
             batch.message = f"论文源暂时不可用：{exc}"
@@ -112,27 +116,6 @@ class RecommendationService:
         # venue scoring. Failures and public-API rate limits degrade gracefully.
         await self._enrich_candidate_metadata(candidates[: min(24, count * 5)])
 
-        previously_recommended = set(self.db.scalars(select(Recommendation.paper_id)))
-        previously_recommended.update(self.db.scalars(select(LibraryEntry.paper_id)))
-        # Papers surfaced by an explicit research study are already known to the
-        # user and should not unexpectedly reappear in future recommendation batches.
-        previously_recommended.update(self.db.scalars(select(ResearchStudyPaper.paper_id)))
-        ranked: list[tuple[Paper, float]] = []
-        fallback_relations: dict[int, dict[str, Any]] = {}
-        for candidate in candidates:
-            haystack = f"{candidate.title} {candidate.abstract}".lower()
-            if exclusions and any(term.lower() in haystack for term in exclusions if term.strip()):
-                continue
-            paper = self._upsert(candidate, tags)
-            if paper.id in previously_recommended:
-                continue
-            score = self._score(candidate, paper, tags)
-            paper.relevance_score = score
-            ranked.append((paper, score))
-            if profile:
-                fallback_relations[paper.id] = self._profile_relevance(candidate, profile, profile_keywords)
-        self.db.commit()
-
         settings = get_settings(self.db)
         preferences = None
         if profile:
@@ -142,61 +125,43 @@ class RecommendationService:
                 f"核心检索概念：{', '.join(profile_keywords)}" if profile_keywords else None,
                 f"种子论文：{', '.join(seed_papers)}" if seed_papers else None,
             ]))
-        llm_used = await self._apply_llm_rerank(ranked, tags, count, settings, preferences)
-        broad_scores = {paper.id: score for paper, score in ranked}
-        relation_data = {**fallback_relations, **self._last_relation_assessments}
-        if profile and mode != "broad":
-            relevance_weight = profile.relevance_weight
-            recency_weight = profile.recency_weight
-            quality_weight = max(0.05, 1 - relevance_weight - recency_weight)
-            for index, (paper, quality_score) in enumerate(ranked):
-                relevance = float(relation_data.get(paper.id, {}).get("relevance_score", 0))
-                age_days = max(0, (datetime.now(timezone.utc) - (paper.published_at or datetime.now(timezone.utc))).days)
-                recency = 100 * math.exp(-age_days / 120)
-                final = relevance * relevance_weight + recency * recency_weight + min(100, quality_score) * quality_weight
-                ranked[index] = (paper, round(final, 3))
-        ranked.sort(key=lambda item: item[1], reverse=True)
-        top_tiers = {"CCF-A/top", "field-top"}
-        top = [item for item in ranked if item[0].venue_tier in top_tiers]
-        frontier = [item for item in ranked if item[0].venue_tier not in top_tiers]
-        if profile and mode in {"focus", "mixed"}:
-            if mode == "mixed":
-                explore_count = min(count, round(count * profile.exploration_ratio))
-                focus_count = count - explore_count
-                chosen = ranked[:focus_count]
-                chosen_ids = {paper.id for paper, _ in chosen}
-                explore_pool = sorted((item for item in ranked if item[0].id not in chosen_ids), key=lambda item: broad_scores.get(item[0].id, 0), reverse=True)
-                chosen.extend(explore_pool[:explore_count])
-                explore_ids = {paper.id for paper, _ in explore_pool[:explore_count]}
-            else:
-                chosen = ranked[:count]
-                explore_ids = set()
-        elif settings.get("only_verified_top_venues"):
-            chosen = top[:count]
-        else:
-            top_target = round(count * float(settings.get("top_venue_ratio", 0.7)))
-            chosen = top[:top_target]
-            chosen.extend(frontier[: count - len(chosen)])
-            if len(chosen) < count:
-                selected_ids = {paper.id for paper, _ in chosen}
-                chosen.extend(item for item in ranked if item[0].id not in selected_ids) 
-                chosen = chosen[:count]
+        pipeline_context = PipelineContext(tags=tags, count=count, mode=mode, settings=settings, profile=profile, exclusions=exclusions, preferences=preferences)
+        candidates = PermanentCandidateFilter(self.db, self._find_existing).apply(candidates, pipeline_context)
+        relation_provider = (lambda candidate: self._profile_relevance(candidate, profile, profile_keywords)) if profile else None
+        feature_provider = DefaultFeatureProvider(self._upsert, self._score, relation_provider)
+        ranked_items = [feature_provider.provide(candidate, pipeline_context) for candidate in candidates]
+        self.db.commit()
+        ranked_items = RuleRanker().rank(ranked_items, pipeline_context)
 
-        for paper, score in chosen:
+        async def llm_rerank(items: list[RankedCandidate], context: PipelineContext) -> bool:
+            ranked_pairs = [(item.paper, item.final_score) for item in items]
+            used = await self._apply_llm_rerank(ranked_pairs, context.tags, context.count, context.settings, context.preferences)
+            score_by_id = {paper.id: score for paper, score in ranked_pairs}
+            for item in items:
+                item.final_score = score_by_id.get(item.paper.id, item.final_score)
+                if item.paper.id in self._last_relation_assessments:
+                    item.relation = self._last_relation_assessments[item.paper.id]
+            return used
+
+        llm_used = await CallbackReranker(llm_rerank).rerank(ranked_items, pipeline_context)
+        result = DefaultSelector().select(ranked_items, pipeline_context, llm_used)
+        chosen = result.items
+
+        for item in chosen:
+            paper, score = item.paper, item.final_score
             recommendation = Recommendation(batch_id=batch.id, paper_id=paper.id, score=score)
             self.db.add(recommendation)
             self.db.flush()
             if profile:
-                relation = relation_data.get(paper.id, {})
+                relation = item.relation
                 relevance = float(relation.get("relevance_score", 0))
-                lane = "explore" if paper.id in locals().get("explore_ids", set()) else "focused" if relevance >= 70 else "adjacent"
                 recommendation.match = RecommendationMatch(
                     profile_id=profile.id,
                     relevance_score=relevance,
                     confidence=float(relation.get("confidence", 55)),
                     matched_concepts_json=json.dumps(relation.get("matched_concepts", []), ensure_ascii=False),
                     reason=str(relation.get("reason") or "根据研究方向描述、关键词与摘要的概念覆盖度计算"),
-                    lane=lane,
+                    lane=item.lane,
                 )
         batch.delivered_count = len(chosen)
         batch.status = "completed"
@@ -209,7 +174,7 @@ class RecommendationService:
         else:
             batch.message = "推荐完成：当前未配置 LLM，已使用规则排序"
         self.db.commit()
-        await self._enrich_selected([paper for paper, _ in chosen])
+        await self._enrich_selected([item.paper for item in chosen])
         self.db.refresh(batch)
         return batch
 
@@ -229,10 +194,7 @@ class RecommendationService:
 
     def _upsert(self, candidate: PaperCandidate, tags: list[Tag]) -> Paper:
         digest = identity_hash(candidate)
-        identities = [Paper.arxiv_id == candidate.arxiv_id, Paper.identity_hash == digest]
-        if candidate.doi:
-            identities.append(Paper.doi == candidate.doi)
-        paper = self.db.scalar(select(Paper).where(or_(*identities)))
+        paper = self._find_existing(candidate)
         venue_name, venue_tier, status = detect_venue(candidate.venue_hint)
         if paper is None:
             paper = Paper(
@@ -267,6 +229,16 @@ class RecommendationService:
         existing = {tag.id for tag in paper.tags}
         paper.tags.extend(tag for tag in tags if tag.id not in existing)
         return paper
+
+    def _find_existing(self, candidate: PaperCandidate) -> Paper | None:
+        identities = [Paper.identity_hash == identity_hash(candidate)]
+        if candidate.arxiv_id:
+            identities.append(Paper.arxiv_id == candidate.arxiv_id)
+        if candidate.doi:
+            identities.append(Paper.doi == candidate.doi)
+        if candidate.semantic_scholar_id:
+            identities.append(Paper.semantic_scholar_id == candidate.semantic_scholar_id)
+        return self.db.scalar(select(Paper).where(or_(*identities)))
 
     def _score(self, candidate: PaperCandidate, paper: Paper, tags: list[Tag]) -> float:
         age_days = max(0, (datetime.now(timezone.utc) - candidate.published_at).days)
@@ -307,6 +279,7 @@ class RecommendationService:
             paper.title_zh = result.get("title_zh")
             paper.abstract_zh = result.get("abstract_zh")
             paper.summary_json = json.dumps(result, ensure_ascii=False)
+            replace_analysis_evidence(self.db, paper, result.get("evidence_items") or [], "abstract")
             paper.ai_status = "completed"
         self.db.commit()
 
@@ -388,6 +361,7 @@ class RecommendationService:
         paper.title_zh = result.get("title_zh")
         paper.abstract_zh = result.get("abstract_zh")
         paper.summary_json = json.dumps(result, ensure_ascii=False)
+        replace_analysis_evidence(self.db, paper, result.get("evidence_items") or [], "abstract")
         paper.ai_status = "completed"
         self.db.commit()
         return paper

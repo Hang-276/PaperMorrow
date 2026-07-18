@@ -44,10 +44,14 @@ DEFAULT_TAGS = [
     ("math-geometry", "几何与拓扑", "Geometry & Topology", "geometry OR topology OR manifold", ["math.DG", "math.GT", "math.AT"]),
     ("math-probability", "概率与统计", "Probability & Statistics", "probability theory OR stochastic process OR mathematical statistics", ["math.PR", "math.ST"]),
     ("math-optimization", "优化与运筹", "Optimization", "optimization OR operations research OR control theory", ["math.OC"]),
+    ("life-biology", "生命科学", "Life Sciences", "molecular biology OR genomics OR cell biology OR neuroscience", ["q-bio.BM", "q-bio.GN", "q-bio.NC"]),
+    ("clinical-evidence", "临床证据", "Clinical Evidence", "clinical trial OR randomized controlled trial OR systematic review OR meta analysis", ["q-bio.QM"]),
+    ("chem-materials", "化学与材料", "Chemistry & Materials", "chemistry OR materials science OR catalysis OR battery", ["cond-mat.mtrl-sci", "physics.chem-ph"]),
+    ("econ-finance", "经济与金融", "Economics & Finance", "economics OR econometrics OR finance OR causal inference", ["econ.EM", "econ.GN", "q-fin.EC", "q-fin.ST"]),
 ]
 
-DOMAIN_LABELS = {"ai": "AI", "computer": "计算机", "physics": "物理", "math": "数学"}
-DOMAIN_PREFIXES = {"computer": ("cs-",), "physics": ("physics-",), "math": ("math-",)}
+DOMAIN_LABELS = {"ai": "AI", "computer": "计算机", "physics": "物理", "math": "数学", "life-sciences":"生命科学", "clinical-medicine":"临床医学", "chemistry-materials":"化学与材料", "economics-finance":"经济学与金融"}
+DOMAIN_PREFIXES = {"computer": ("cs-",), "physics": ("physics-",), "math": ("math-",), "life-sciences":("life-",), "clinical-medicine":("clinical-",), "chemistry-materials":("chem-",), "economics-finance":("econ-",)}
 
 
 def tag_domain(slug: str) -> str:

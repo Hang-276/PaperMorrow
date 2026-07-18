@@ -13,6 +13,7 @@ from .catalog import seed_catalog
 from .config import ROOT_DIR
 from .database import SessionLocal, init_db
 from .deepwiki_service import repair_incomplete_wikis
+from .domain_pack_service import seed_domain_packs
 from .library_service import ensure_library_membership_migration
 from .scheduler import start_scheduler, stop_scheduler
 
@@ -23,6 +24,7 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         seed_catalog(db)
+        seed_domain_packs(db)
         ensure_library_membership_migration(db)
         repair_incomplete_wikis(db)
     finally:

@@ -71,6 +71,8 @@ class Paper(Base):
     local_files: Mapped[list["LocalPaperFile"]] = relationship(back_populates="paper", cascade="all, delete-orphan")
     research_results: Mapped[list["ResearchStudyPaper"]] = relationship(back_populates="paper", cascade="all, delete-orphan")
     zotero_link: Mapped["ZoteroLink | None"] = relationship(back_populates="paper", uselist=False, cascade="all, delete-orphan")
+    work_version: Mapped["PaperVersion | None"] = relationship(back_populates="paper", uselist=False, cascade="all, delete-orphan")
+    analysis_evidence: Mapped[list["PaperAnalysisEvidence"]] = relationship(back_populates="paper", cascade="all, delete-orphan")
 
 
 class Tag(Base):
@@ -118,10 +120,56 @@ class Recommendation(Base):
     match: Mapped["RecommendationMatch | None"] = relationship(back_populates="recommendation", uselist=False, cascade="all, delete-orphan")
 
 
+class DomainPack(Base):
+    __tablename__ = "domain_packs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    name_zh: Mapped[str] = mapped_column(String(160))
+    name_en: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(Text, default="")
+    is_builtin: Mapped[bool] = mapped_column(Boolean, default=False)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    source_adapters_json: Mapped[str] = mapped_column(Text, default="[]")
+    search_templates_json: Mapped[str] = mapped_column(Text, default="[]")
+    keywords_json: Mapped[str] = mapped_column(Text, default="[]")
+    exclusions_json: Mapped[str] = mapped_column(Text, default="[]")
+    category_codes_json: Mapped[str] = mapped_column(Text, default="[]")
+    venue_rules_json: Mapped[str] = mapped_column(Text, default="[]")
+    paper_types_json: Mapped[str] = mapped_column(Text, default="[]")
+    scoring_weights_json: Mapped[str] = mapped_column(Text, default="{}")
+    evidence_rules_json: Mapped[str] = mapped_column(Text, default="{}")
+    analysis_prompt: Mapped[str] = mapped_column(Text, default="")
+    review_prompt: Mapped[str] = mapped_column(Text, default="")
+    citation_config_json: Mapped[str] = mapped_column(Text, default="{}")
+    impact_config_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    metrics: Mapped[list["DomainMetric"]] = relationship(back_populates="domain_pack", cascade="all, delete-orphan")
+    research_profiles: Mapped[list["ResearchProfile"]] = relationship(back_populates="domain_pack")
+
+
+class DomainMetric(Base):
+    __tablename__ = "domain_metrics"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    domain_pack_id: Mapped[int] = mapped_column(ForeignKey("domain_packs.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    value: Mapped[float] = mapped_column(Float)
+    year: Mapped[int] = mapped_column(Integer)
+    source_url: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    domain_pack: Mapped[DomainPack] = relationship(back_populates="metrics")
+
+
 class ResearchProfile(Base):
     __tablename__ = "research_profiles"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    domain_pack_id: Mapped[int | None] = mapped_column(ForeignKey("domain_packs.id", ondelete="SET NULL"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(160))
     domain: Mapped[str] = mapped_column(String(32), default="ai", index=True)
     description: Mapped[str] = mapped_column(Text)
@@ -134,6 +182,8 @@ class ResearchProfile(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    domain_pack: Mapped["DomainPack | None"] = relationship(back_populates="research_profiles")
 
 
 class RecommendationContext(Base):
@@ -265,6 +315,7 @@ class ResearchStudy(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     papers: Mapped[list["ResearchStudyPaper"]] = relationship(back_populates="study", cascade="all, delete-orphan", order_by="ResearchStudyPaper.rank")
+    artifacts: Mapped["ResearchStudyArtifact | None"] = relationship(back_populates="study", uselist=False, cascade="all, delete-orphan")
 
 
 class ResearchStudyPaper(Base):
@@ -286,6 +337,21 @@ class ResearchStudyPaper(Base):
 
     study: Mapped[ResearchStudy] = relationship(back_populates="papers")
     paper: Mapped[Paper] = relationship(back_populates="research_results")
+
+
+class ResearchStudyArtifact(Base):
+    __tablename__ = "research_study_artifacts"
+
+    study_id: Mapped[int] = mapped_column(ForeignKey("research_studies.id", ondelete="CASCADE"), primary_key=True)
+    taxonomy_json: Mapped[str] = mapped_column(Text, default="[]")
+    comparison_json: Mapped[str] = mapped_column(Text, default="[]")
+    research_routes_json: Mapped[str] = mapped_column(Text, default="[]")
+    representative_works_json: Mapped[str] = mapped_column(Text, default="[]")
+    controversies_json: Mapped[str] = mapped_column(Text, default="[]")
+    gaps_json: Mapped[str] = mapped_column(Text, default="[]")
+    cited_review_markdown: Mapped[str] = mapped_column(Text, default="")
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    study: Mapped[ResearchStudy] = relationship(back_populates="artifacts")
 
 
 class ZoteroLink(Base):
@@ -411,3 +477,187 @@ class DeepWikiJob(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     paper: Mapped[Paper] = relationship()
+
+
+class ResearchProject(Base):
+    __tablename__ = "research_projects"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(500))
+    research_question: Mapped[str] = mapped_column(Text, default="")
+    research_direction: Mapped[str] = mapped_column(Text, default="")
+    domain_pack_id: Mapped[int | None] = mapped_column(ForeignKey("domain_packs.id", ondelete="SET NULL"), nullable=True, index=True)
+    research_profile_id: Mapped[int | None] = mapped_column(ForeignKey("research_profiles.id", ondelete="SET NULL"), nullable=True, index=True)
+    repository_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    deepwiki_job_id: Mapped[int | None] = mapped_column(ForeignKey("deepwiki_jobs.id", ondelete="SET NULL"), nullable=True)
+    current_conclusion: Mapped[str] = mapped_column(Text, default="")
+    unresolved_questions_json: Mapped[str] = mapped_column(Text, default="[]")
+    next_reading_suggestion: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    papers: Mapped[list["ResearchProjectPaper"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="ResearchProjectPaper.queue_order")
+    notes: Mapped[list["ResearchProjectNote"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="ResearchProjectNote.updated_at")
+    studies: Mapped[list["ResearchProjectStudy"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+
+
+class ResearchProjectPaper(Base):
+    __tablename__ = "research_project_papers"
+    __table_args__ = (UniqueConstraint("project_id", "paper_id", name="uq_research_project_paper"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("research_projects.id", ondelete="CASCADE"), index=True)
+    paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(24), default="to_verify")
+    reading_status: Mapped[str] = mapped_column(String(32), default="to_screen")
+    queue_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    project: Mapped[ResearchProject] = relationship(back_populates="papers")
+    paper: Mapped[Paper] = relationship()
+
+
+class ResearchProjectNote(Base):
+    __tablename__ = "research_project_notes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("research_projects.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(300), default="项目笔记")
+    content: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    project: Mapped[ResearchProject] = relationship(back_populates="notes")
+
+
+class ResearchProjectStudy(Base):
+    __tablename__ = "research_project_studies"
+    __table_args__ = (UniqueConstraint("project_id", "study_id", name="uq_research_project_study"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("research_projects.id", ondelete="CASCADE"), index=True)
+    study_id: Mapped[int] = mapped_column(ForeignKey("research_studies.id", ondelete="CASCADE"), index=True)
+    project: Mapped[ResearchProject] = relationship(back_populates="studies")
+    study: Mapped[ResearchStudy] = relationship()
+
+
+class ProjectChatMessage(Base):
+    __tablename__ = "project_chat_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("research_projects.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(16))
+    content: Mapped[str] = mapped_column(Text)
+    sources_json: Mapped[str] = mapped_column(Text, default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PaperWork(Base):
+    __tablename__ = "paper_works"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    canonical_title: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    versions: Mapped[list["PaperVersion"]] = relationship(back_populates="work", cascade="all, delete-orphan", order_by="PaperVersion.version_date")
+
+
+class PaperVersion(Base):
+    __tablename__ = "paper_versions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    work_id: Mapped[int] = mapped_column(ForeignKey("paper_works.id", ondelete="CASCADE"), index=True)
+    paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), unique=True, index=True)
+    version_label: Mapped[str] = mapped_column(String(160), default="原始版本")
+    relation_type: Mapped[str] = mapped_column(String(32), default="same_work")
+    confidence: Mapped[float] = mapped_column(Float, default=1.0)
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=True)
+    match_reason: Mapped[str] = mapped_column(Text, default="")
+    important_changes: Mapped[str] = mapped_column(Text, default="")
+    version_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    work: Mapped[PaperWork] = relationship(back_populates="versions")
+    paper: Mapped[Paper] = relationship(back_populates="work_version")
+
+
+class PaperMergeAudit(Base):
+    __tablename__ = "paper_merge_audits"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), index=True)
+    from_work_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    to_work_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    action: Mapped[str] = mapped_column(String(24))
+    snapshot_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PaperAnalysisEvidence(Base):
+    __tablename__ = "paper_analysis_evidence"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), index=True)
+    field_name: Mapped[str] = mapped_column(String(80))
+    claim: Mapped[str] = mapped_column(Text)
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    section: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    evidence_excerpt: Mapped[str] = mapped_column(Text, default="")
+    source_scope: Mapped[str] = mapped_column(String(24), default="abstract")
+    conclusion_type: Mapped[str] = mapped_column(String(24), default="paper_fact")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    paper: Mapped[Paper] = relationship(back_populates="analysis_evidence")
+
+
+class KnowledgeNode(Base):
+    __tablename__ = "knowledge_nodes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    node_type: Mapped[str] = mapped_column(String(40), index=True)
+    label: Mapped[str] = mapped_column(Text)
+    external_key: Mapped[str] = mapped_column(String(300), unique=True, index=True)
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KnowledgeEdge(Base):
+    __tablename__ = "knowledge_edges"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_node_id: Mapped[int] = mapped_column(ForeignKey("knowledge_nodes.id", ondelete="CASCADE"), index=True)
+    target_node_id: Mapped[int] = mapped_column(ForeignKey("knowledge_nodes.id", ondelete="CASCADE"), index=True)
+    relation_type: Mapped[str] = mapped_column(String(40), index=True)
+    source_type: Mapped[str] = mapped_column(String(40))
+    source_id: Mapped[str] = mapped_column(String(300))
+    evidence: Mapped[str] = mapped_column(Text)
+    confidence: Mapped[float] = mapped_column(Float)
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PaperResource(Base):
+    __tablename__ = "paper_resources"
+    __table_args__ = (UniqueConstraint("paper_id", "resource_type", "url", name="uq_paper_resource"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), index=True)
+    resource_type: Mapped[str] = mapped_column(String(32))
+    url: Mapped[str] = mapped_column(Text)
+    label: Mapped[str] = mapped_column(String(300), default="")
+    source: Mapped[str] = mapped_column(String(40), default="user")
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ReproductionCheck(Base):
+    __tablename__ = "reproduction_checks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), index=True)
+    deepwiki_job_id: Mapped[int | None] = mapped_column(ForeignKey("deepwiki_jobs.id", ondelete="SET NULL"), nullable=True)
+    check_key: Mapped[str] = mapped_column(String(80))
+    title: Mapped[str] = mapped_column(String(300))
+    status: Mapped[str] = mapped_column(String(32))
+    evidence: Mapped[str] = mapped_column(Text, default="")
+    details: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

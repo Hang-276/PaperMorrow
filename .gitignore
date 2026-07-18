@@ -1,16 +1,25 @@
-# Python-generated files
+# Python-generated files and caches
 __pycache__/
 *.py[oc]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
 
 # Local secrets and environment overrides
 .env
 .env.*
 !.env.example
 **/secrets.json
+*.pem
+*.key
+*.p12
+*.pfx
 
 # Virtual environments
 .venv
@@ -29,12 +38,29 @@ todo.md
 
 output/
 
+# Frontend dependencies, caches, and production output
 node_modules/
 frontend/dist/
+frontend/.vite/
+
+# Local-first user state (databases, papers, notes, Wikis, PDFs, and history)
 data/
-.venv-paper/
 *.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.pdf
+
+# Local runtimes, archives, and desktop build output
+.venv-paper/
 desktop_build/
 desktop_dist/
 .pyinstaller-cache/
 .venv-desktop/
+*.zip
+*.dmg
+*.pkg
+*.exe
+*.app/

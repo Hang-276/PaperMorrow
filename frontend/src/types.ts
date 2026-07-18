@@ -4,7 +4,7 @@ export type Tag = {
   name_zh: string
   name_en: string
   query: string
-  domain: 'ai' | 'computer' | 'physics' | 'math'
+  domain: string
 }
 
 export type LibraryTag = {
@@ -79,6 +79,9 @@ export type Paper = {
   primary_url: string
   pdf_url?: string | null
   summary?: Summary | null
+  analysis_scope?: 'abstract'|'full_text'|'author_statement'|null
+  analysis_evidence?: {id:number;field_name:string;claim:string;page_number?:number|null;section?:string|null;evidence_excerpt:string;source_scope:string;conclusion_type:string}[]
+  work_version?: {work_id:number;version_label:string;confidence:number;confirmed:boolean}|null
   ai_status: string
   repository_url?: string | null
   repository_status: string
@@ -136,7 +139,9 @@ export type Batch = {
 export type ResearchProfile = {
   id: number
   name: string
-  domain: 'ai' | 'computer' | 'physics' | 'math'
+  domain: string
+  domain_pack_id?: number | null
+  domain_pack?: Pick<DomainPack,'id'|'slug'|'name_zh'|'name_en'> | null
   description: string
   positive_keywords: string[]
   negative_keywords: string[]
@@ -147,6 +152,20 @@ export type ResearchProfile = {
   enabled: boolean
   created_at: string
   updated_at: string
+}
+
+export type DomainPack = {
+  id:number; slug:string; name_zh:string; name_en:string; description:string; is_builtin:boolean; version:number; enabled:boolean
+  source_adapters:{adapter:string;enabled?:boolean;[key:string]:unknown}[]; search_templates:string[]; keywords:string[]; exclusions:string[]; category_codes:string[]
+  venue_rules:any[]; paper_types:string[]; scoring_weights:Record<string,number>; evidence_rules:Record<string,any>; analysis_prompt:string; review_prompt:string
+  citation_config:Record<string,any>; impact_config:Record<string,any>; metrics:{id?:number;name:string;value:number;year:number;source_url:string}[]; created_at:string; updated_at:string
+}
+
+export type ResearchProject = {
+  id:number; title:string; research_question:string; research_direction:string; domain_pack_id?:number|null; research_profile_id?:number|null
+  repository_url?:string|null; deepwiki_job_id?:number|null; current_conclusion:string; unresolved_questions:string[]; next_reading_suggestion:string
+  created_at:string; updated_at:string; study_ids?:number[]; notes?:{id:number;title:string;content:string;updated_at:string}[]
+  papers?:{link_id:number;paper_id:number;title:string;title_zh?:string|null;role:'core'|'support'|'conflict'|'background'|'to_verify';reading_status:'to_screen'|'to_read'|'reading'|'read_to_organize'|'completed'|'shelved';queue_order:number;venue?:string|null}[]
 }
 
 export type DeepWikiJob = {
@@ -219,7 +238,7 @@ export type ResearchStudyPaper = {
 
 export type ResearchStudy = {
   id: number
-  domain: 'ai'|'computer'|'physics'|'math'
+  domain: string
   prompt: string
   title: string
   status: string
@@ -230,13 +249,14 @@ export type ResearchStudy = {
   error?: string | null
   paper_count: number
   papers?: ResearchStudyPaper[]
+  artifacts?: {taxonomy:any[];comparison:any[];research_routes:any[];representative_works:any[];controversies:any[];gaps:any[];cited_review_markdown:string;generated_at:string}|null
   created_at: string
   updated_at: string
 }
 
 export type KnowledgeGraphData = {
-  nodes: { id:string; type:'paper'|'folder'|'tag'|'concept'; label:string; paper_id?:number; color?:string }[]
-  edges: { source:string; target:string; type:string }[]
+  nodes: { id:string; type:string; label:string; paper_id?:number; color?:string; metadata?:Record<string,any> }[]
+  edges: { source:string; target:string; type:string; evidence?:string;confidence?:number;confirmed?:boolean;source_type?:string;source_id?:string }[]
 }
 
 export type LLMProfile = {

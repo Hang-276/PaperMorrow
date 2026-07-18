@@ -3,7 +3,17 @@ import base64
 import uuid
 import asyncio
 import json
+import os
+import tempfile
 from typing import ClassVar
+
+_TEST_DATA_DIR = tempfile.mkdtemp(prefix="papermorrow-tests-")
+os.environ["PAPERMORROW_DATA_DIR"] = _TEST_DATA_DIR
+os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DATA_DIR}/fixture.db"
+os.environ["LLM_API_KEY"] = ""
+os.environ["GITHUB_TOKEN"] = ""
+os.environ["SEMANTIC_SCHOLAR_API_KEY"] = ""
+os.environ["OPENALEX_API_KEY"] = ""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,24 +25,37 @@ from backend.agent.researcher import create_researcher, _requested_final_answer
 from backend.app.catalog import detect_venue
 from backend.app.deepwiki_service import _fallback_page, _generate_llm_wiki, _generate_original_wiki, _generate_wiki, _valid_page_content, _write_wiki, validate_repository_url, wiki_is_full_deepwiki
 from backend.app.main import app
-from backend.app.database import SessionLocal
-from backend.app.models import ChatSession, LibraryEntry, LibraryFolder, LibraryTag, LocalPaperFile, Paper, PaperNote, RecommendationAssessment, RecommendationBatch, ResearchProfile, ResearchStudy, Tag, TokenUsage
+from backend.app.database import SessionLocal, init_db
+from backend.app.models import ChatSession, DomainPack, LibraryEntry, LibraryFolder, LibraryTag, LocalPaperFile, Paper, PaperNote, RecommendationAssessment, RecommendationBatch, ResearchProfile, ResearchStudy, Tag, TokenUsage
 from backend.app.library_folder_service import LibraryFolderService
-from backend.app.research_service import ResearchService
+from backend.app.research_service import ResearchService, research_study_dict
 from backend.app.recommendation import RecommendationService
 from backend.app.paper_sources import PaperCandidate
 from backend.app.recommendation import identity_hash, normalize_title
+from backend.app.recommendation_pipeline import (
+    ArxivCandidateSource, CandidateFilter, CandidateSource, DefaultSelector,
+    PermanentCandidateFilter, RecommendationContext as PipelineContext,
+    RecommendationResult, RuleRanker,
+)
 from backend.app.llm import LLMClient, provider_defaults
 from backend.app.schemas import SettingsUpdate
 from backend.app.settings_service import get_settings, update_settings
 from backend.app.usage_service import token_usage_stats
 from backend.app.zotero_service import ZoteroService
+from backend.app.domain_sources import test_source_config as probe_domain_source
+from backend.app.migrations import run_migrations
+from backend.app.database import engine
 from backend.prompts.prompt_template import apply_prompt_template
 from backend.model.notepad import Notepad
 from backend.model.todo_list import TodoList
 from backend.model.state import TokenCounter
 from backend.workspace import Project
 from backend.tools.code_rag_tools import search_in_folders as search_in_folders_tool
+
+
+@pytest.fixture(scope="session", autouse=True)
+def initialize_database_schema():
+    init_db()
 
 
 def test_title_normalization_and_identity_are_stable():
@@ -50,6 +73,51 @@ def test_title_normalization_and_identity_are_stable():
     digest = identity_hash(candidate)
     candidate.title = "A completely changed title"
     assert identity_hash(candidate) == digest
+
+
+def test_recommendation_pipeline_interfaces_and_permanent_filter():
+    class FakeArxiv:
+        async def fetch(self, categories, keywords, limit):
+            return []
+
+    source = ArxivCandidateSource(FakeArxiv())
+    assert isinstance(source, CandidateSource)
+    assert isinstance(RuleRanker(), object)
+    assert isinstance(DefaultSelector(), object)
+    assert RecommendationResult(items=[], degraded=True).degraded is True
+
+    db = SessionLocal()
+    marker = uuid.uuid4().hex[:12]
+    paper = Paper(
+        title_en=f"Permanent dedup {marker}", abstract_en="Known local paper.", authors_json="[]",
+        primary_url="https://example.com/known", arxiv_id=f"known-{marker}", identity_hash=uuid.uuid4().hex,
+    )
+    paper.library_entry = LibraryEntry(source="test")
+    db.add(paper); db.commit()
+    known = PaperCandidate(
+        title=paper.title_en, abstract="Known local paper.", authors=["A"],
+        published_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
+        arxiv_id=paper.arxiv_id, primary_url=paper.primary_url, pdf_url=None,
+    )
+    excluded = PaperCandidate(
+        title=f"Excluded {marker}", abstract="prompt-only approach", authors=["B"],
+        published_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
+        arxiv_id=f"excluded-{marker}", primary_url="https://example.com/excluded", pdf_url=None,
+    )
+    fresh = PaperCandidate(
+        title=f"Fresh {marker}", abstract="New candidate", authors=["C"],
+        published_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
+        arxiv_id=f"fresh-{marker}", primary_url="https://example.com/fresh", pdf_url=None,
+    )
+    resolver = lambda item: db.query(Paper).filter(Paper.arxiv_id == item.arxiv_id).one_or_none()
+    candidate_filter = PermanentCandidateFilter(db, resolver)
+    assert isinstance(candidate_filter, CandidateFilter)
+    context = PipelineContext(tags=[], count=5, mode="broad", settings={}, exclusions=["prompt-only"])
+    try:
+        accepted = candidate_filter.apply([known, excluded, fresh, fresh], context)
+        assert accepted == [fresh]
+    finally:
+        db.delete(paper); db.commit(); db.close()
 
 
 def test_venue_detection_requires_explicit_publication_signal_upstream():
@@ -136,6 +204,47 @@ def test_api_defaults_and_chat_contract():
         }
         chat = client.post("/api/papers/999/chat", json={"message": "hello"})
         assert chat.status_code == 404
+
+
+def test_domain_pack_builtins_custom_wizard_and_migration_are_incremental():
+    assert run_migrations(engine) == []
+    custom_id = None
+    slug = f"test-domain-{uuid.uuid4().hex[:8]}"
+    with TestClient(app) as client:
+        packs = client.get("/api/domain-packs").json()
+        assert {"ai","computer","physics","math","life-sciences","clinical-medicine","chemistry-materials","economics-finance"}.issubset({item["slug"] for item in packs})
+        clinical = next(item for item in packs if item["slug"] == "clinical-medicine")
+        assert clinical["evidence_rules"]["preprint_risk"] is True
+        assert clinical["evidence_rules"]["impact_factor_is_not_sufficient"] is True
+        created = client.post("/api/domain-packs", json={
+            "slug":slug,"name_zh":"测试专业","name_en":"Test Domain","description":"用于固定契约测试",
+            "source_adapters":[{"adapter":"crossref","enabled":True}],"keywords":["contract testing"],
+            "venue_rules":[{"name":"Verified Venue","aliases":["VV"],"paper_types":["journal_article"],"level":"top"}],
+            "metrics":[{"name":"可核验指标","value":88.5,"year":2025,"source_url":"https://example.com/metric"}],
+        })
+        assert created.status_code == 200
+        custom_id = created.json()["id"]
+        preview = client.post(f"/api/domain-packs/{custom_id}/search-preview", json={"query":"evidence"})
+        assert preview.status_code == 200 and "evidence" in preview.json()["query"]
+        exported = client.get(f"/api/domain-packs/{custom_id}/export").json()
+        assert "id" not in exported and exported["metrics"][0]["source_url"] == "https://example.com/metric"
+        assert client.put(f"/api/domain-packs/{custom_id}", json={"enabled":False}).json()["enabled"] is False
+        assert client.delete(f"/api/domain-packs/{custom_id}").status_code == 200
+        custom_id = None
+    if custom_id:
+        db = SessionLocal(); pack = db.get(DomainPack, custom_id)
+        if pack: db.delete(pack); db.commit()
+        db.close()
+
+
+def test_domain_source_adapter_uses_mock_contract_not_live_network():
+    import httpx
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"message":{"items":[]}}))
+    async def run():
+        async with httpx.AsyncClient(transport=transport) as client:
+            return await probe_domain_source({"adapter":"crossref","enabled":True}, client)
+    result = asyncio.run(run())
+    assert result["ok"] is True and result["adapter"] == "crossref"
 
 
 def test_research_profile_crud_and_weight_validation():
@@ -856,3 +965,121 @@ def test_llm_research_ranks_deduplicates_and_generates_review():
                 db.delete(paper)
         db.commit()
         db.close()
+
+
+def test_research_project_workflow_and_fts_are_project_scoped():
+    marker = uuid.uuid4().hex[:12]
+    db = SessionLocal()
+    paper = Paper(title_en=f"Scoped Project Evidence {marker}", abstract_en=f"exclusive-evidence-{marker} supports a reproducible method", authors_json="[]", primary_url=f"https://example.com/{marker}", identity_hash=uuid.uuid4().hex)
+    db.add(paper); db.commit(); paper_id = paper.id; db.close()
+    project_ids = []
+    try:
+        with TestClient(app) as client:
+            for suffix in ("A", "B"):
+                response = client.post("/api/projects", json={"title": f"Project {suffix} {marker}", "research_question": "What is supported?"})
+                assert response.status_code == 200
+                project_ids.append(response.json()["id"])
+            added = client.post(f"/api/projects/{project_ids[0]}/papers", json={"paper_id": paper_id, "role": "core", "reading_status": "reading"})
+            assert added.status_code == 200
+            assert added.json()["papers"][0]["role"] == "core"
+            found = client.post(f"/api/projects/{project_ids[0]}/search", json={"query": f"exclusive evidence {marker}"}).json()["items"]
+            isolated = client.post(f"/api/projects/{project_ids[1]}/search", json={"query": f"exclusive evidence {marker}"}).json()["items"]
+            assert found and found[0]["source_type"] == "paper"
+            assert isolated == []
+            chat = client.post(f"/api/projects/{project_ids[0]}/chat", json={"message": f"exclusive evidence {marker}"})
+            assert chat.status_code == 200
+            assert chat.json()["sources"] and chat.json()["contains_ai_inference"] is False
+            updated = client.put(f"/api/projects/{project_ids[0]}/papers/{paper_id}", json={"reading_status": "completed", "role": "support"})
+            assert updated.json()["papers"][0]["reading_status"] == "completed"
+    finally:
+        db = SessionLocal()
+        from backend.app.models import ResearchProject
+        for project_id in project_ids:
+            project = db.get(ResearchProject, project_id)
+            if project: db.delete(project)
+        paper = db.get(Paper, paper_id)
+        if paper: db.delete(paper)
+        db.commit(); db.close()
+
+
+def test_evidence_scope_and_conservative_version_actions():
+    from backend.app.evidence_service import link_versions, match_paper_versions, split_version, undo_last_version_action, work_timeline
+    from backend.app.models import PaperWork
+    marker = uuid.uuid4().hex[:10]
+    db = SessionLocal()
+    first = Paper(title_en=f"Versioned Agent Study {marker}", abstract_en="First abstract evidence.", authors_json='["A", "B"]', primary_url=f"https://arxiv.org/abs/{marker}v1", arxiv_id=f"{marker}v1", identity_hash=uuid.uuid4().hex)
+    second = Paper(title_en=f"Versioned Agent Study {marker}", abstract_en="Extended evidence.", authors_json='["A", "B"]', primary_url=f"https://arxiv.org/abs/{marker}v2", arxiv_id=f"{marker}v2", identity_hash=uuid.uuid4().hex)
+    unrelated = Paper(title_en=f"Unrelated Chemistry {marker}", abstract_en="Other work.", authors_json='["C"]', primary_url=f"https://example.com/{marker}", identity_hash=uuid.uuid4().hex)
+    db.add_all([first, second, unrelated]); db.commit(); ids=[first.id,second.id,unrelated.id]
+    try:
+        confidence, reason = match_paper_versions(first, second)
+        assert confidence == .99 and "arXiv" in reason
+        assert match_paper_versions(first, unrelated)[0] < .75
+        linked = link_versions(db, first, second)
+        assert linked.confirmed is True
+        assert len(work_timeline(db, first)["versions"]) == 2
+        split_version(db, second); assert second.work_version.work_id != first.work_version.work_id
+        undo_last_version_action(db, second); assert second.work_version.work_id == first.work_version.work_id
+        db.commit()
+        with TestClient(app) as client:
+            invalid = client.put(f"/api/papers/{first.id}/evidence", json={"source_scope":"abstract","items":[{"field_name":"method","claim":"claim","page_number":2,"evidence_excerpt":"evidence"}]})
+            assert invalid.status_code == 422
+            valid = client.put(f"/api/papers/{first.id}/evidence", json={"source_scope":"abstract","items":[{"field_name":"method","claim":"claim","evidence_excerpt":"First abstract evidence.","conclusion_type":"author_claim"}]})
+            assert valid.status_code == 200
+            body=valid.json(); assert body["scope_label"] == "仅摘要分析" and body["items"][0]["page_number"] is None
+    finally:
+        for paper_id in ids:
+            paper=db.get(Paper,paper_id)
+            if paper: db.delete(paper)
+        db.commit()
+        db.close()
+
+
+def test_structured_research_artifacts_are_traceable():
+    marker=uuid.uuid4().hex[:10]
+    db=SessionLocal(); papers=[]
+    study=ResearchStudy(domain="ai",prompt="traceable research",title=f"Traceable {marker}",status="completed",core_concepts_json='["verification","memory"]')
+    db.add(study); db.flush()
+    for index in range(2):
+        paper=Paper(title_en=f"Evidence Paper {index} {marker}",abstract_en="Supported abstract claim.",authors_json="[]",primary_url=f"https://example.com/{marker}/{index}",identity_hash=uuid.uuid4().hex)
+        db.add(paper); db.flush(); papers.append(paper)
+        from backend.app.models import ResearchStudyPaper
+        study.papers.append(ResearchStudyPaper(paper_id=paper.id,rank=index+1,reason="摘要支持的关联理由",confidence=80,final_score=80))
+    db.commit()
+    try:
+        ResearchService(db).build_artifacts(study); db.commit(); db.refresh(study)
+        payload=research_study_dict(study)["artifacts"]
+        assert payload["comparison"] and all(row["citation"].startswith("P") for row in payload["comparison"])
+        for key in ("taxonomy","research_routes","controversies","gaps"):
+            assert all(item["citations"] for item in payload[key])
+        assert all(item["inference"] is True for item in payload["controversies"]+payload["gaps"])
+    finally:
+        db.delete(study); db.flush()
+        for paper in papers: db.delete(paper)
+        db.commit(); db.close()
+
+
+def test_grounded_graph_and_reproduction_status_contract():
+    from backend.app.knowledge_graph_service import CHECK_STATUSES, add_resource, create_grounded_edge, generate_reproduction_checklist, upsert_node
+    from backend.app.models import KnowledgeEdge, KnowledgeNode, PaperResource, ReproductionCheck
+    marker=uuid.uuid4().hex[:10]; db=SessionLocal()
+    paper=Paper(title_en=f"Graph Paper {marker}",abstract_en="method evidence",authors_json="[]",primary_url=f"https://example.com/{marker}",identity_hash=uuid.uuid4().hex,repository_url=f"https://github.com/example/{marker}",repository_status="candidate")
+    db.add(paper); db.flush()
+    paper_node=upsert_node(db,"paper",paper.title_en,f"paper:{paper.id}")
+    method_node=upsert_node(db,"method","Verified training",f"method:{marker}")
+    edge=create_grounded_edge(db,paper_node.id,method_node.id,"proposes","paper",str(paper.id),"Abstract states the method.",.82)
+    add_resource(db,paper,"model_weights",f"https://example.com/{marker}/weights","Weights","user",True)
+    checks=generate_reproduction_checklist(db,paper,None); db.commit()
+    try:
+        assert edge.evidence and edge.confidence == .82
+        assert all(item.status in CHECK_STATUSES for item in checks)
+        assert next(item for item in checks if item.check_key=="method_alignment").status == "unable_to_confirm"
+        assert next(item for item in checks if item.check_key=="repository").status == "possibly_consistent"
+        assert next(item for item in checks if item.check_key=="weights").status == "confirmed"
+        with pytest.raises(ValueError):
+            create_grounded_edge(db,paper_node.id,method_node.id,"semantic_similarity","ai","x","looks similar",.9)
+        assert not db.query(KnowledgeEdge).filter(KnowledgeEdge.relation_type.like("%similar%")).count()
+    finally:
+        db.query(ReproductionCheck).filter_by(paper_id=paper.id).delete(synchronize_session=False)
+        db.query(PaperResource).filter_by(paper_id=paper.id).delete(synchronize_session=False)
+        db.delete(edge); db.delete(paper_node); db.delete(method_node); db.delete(paper); db.commit(); db.close()

@@ -12,12 +12,12 @@ from sqlalchemy.orm import Session
 
 from .catalog import detect_venue
 from .llm import LLMClient, LLMNotConfigured
-from .models import Paper, PaperStudyState, ResearchStudy, ResearchStudyPaper
+from .models import Paper, PaperStudyState, ResearchStudy, ResearchStudyArtifact, ResearchStudyPaper
 from .paper_sources import ArxivSource, PaperCandidate, SemanticScholarSource
 from .recommendation import identity_hash, normalize_title
 
 
-DOMAIN_LABELS = {"ai": "人工智能", "computer": "计算机", "physics": "物理", "math": "数学"}
+DOMAIN_LABELS = {"ai": "人工智能", "computer": "计算机", "physics": "物理", "math": "数学", "life-sciences": "生命科学", "clinical-medicine": "临床医学", "chemistry-materials": "化学与材料", "economics-finance": "经济学与金融"}
 
 
 class ResearchService:
@@ -108,8 +108,31 @@ class ResearchService:
             "value_score": item.value_score,
         } for item in study.papers]
         study.review_markdown = await self.llm.generate_literature_review(study.prompt, DOMAIN_LABELS.get(study.domain, study.domain), papers)
+        self.build_artifacts(study)
         self.db.commit(); self.db.refresh(study)
         return study
+
+    def build_artifacts(self, study: ResearchStudy) -> ResearchStudyArtifact:
+        if not study.papers:
+            raise ValueError("调研没有可引用论文")
+        refs = [{"citation": f"P{index + 1}", "item": item, "paper": item.paper} for index, item in enumerate(study.papers)]
+        concepts = json.loads(study.core_concepts_json or "[]") or ["核心问题"]
+        taxonomy = [{"name": concept, "description": f"围绕“{concept}”组织的研究类别；需结合所引摘要进一步核验。", "citations": [row["citation"] for row in refs[:3]], "inference": True} for concept in concepts[:8]]
+        comparison = [{"citation": row["citation"], "title": row["paper"].title_en, "venue": row["paper"].venue_name or "预印本", "method_or_claim": row["item"].reason, "evidence_scope": "abstract", "confidence": row["item"].confidence, "source_url": row["paper"].primary_url} for row in refs]
+        routes = [{"name": f"路线 {index + 1}：{concept}", "summary": "由当前排序论文的摘要与关联理由归纳，属于可追溯的 AI 分类。", "citations": [row["citation"] for row in refs[index::max(1, len(concepts[:4]))][:5]], "inference": True} for index, concept in enumerate(concepts[:4])]
+        representative = [{"citation": row["citation"], "title": row["paper"].title_en, "reason": row["item"].reason, "source_url": row["paper"].primary_url, "inference": False} for row in refs[:5]]
+        controversies = [{"claim": "当前摘要集合对方法优势的证据强度和适用边界可能并不一致。", "citations": [row["citation"] for row in refs[:min(4, len(refs))]], "inference": True, "needs_full_text": True}]
+        gaps = [{"claim": "仅凭摘要无法确认所有实验设置、负面结果与复现细节，需在全文阅读后更新。", "citations": [row["citation"] for row in refs], "inference": True, "needs_full_text": True}]
+        artifact = study.artifacts or ResearchStudyArtifact(study=study)
+        artifact.taxonomy_json = json.dumps(taxonomy, ensure_ascii=False)
+        artifact.comparison_json = json.dumps(comparison, ensure_ascii=False)
+        artifact.research_routes_json = json.dumps(routes, ensure_ascii=False)
+        artifact.representative_works_json = json.dumps(representative, ensure_ascii=False)
+        artifact.controversies_json = json.dumps(controversies, ensure_ascii=False)
+        artifact.gaps_json = json.dumps(gaps, ensure_ascii=False)
+        artifact.cited_review_markdown = study.review_markdown or ""
+        self.db.add(artifact); self.db.flush()
+        return artifact
 
     async def _search(self, terms: list[str], per_query: int) -> list[PaperCandidate]:
         tasks = []
@@ -167,6 +190,7 @@ def research_study_dict(study: ResearchStudy, include_papers: bool = True) -> di
         "review_markdown": study.review_markdown, "model": study.model, "error": study.error,
         "created_at": study.created_at.isoformat(), "updated_at": study.updated_at.isoformat(),
         "paper_count": len(study.papers),
+        "artifacts": _artifact_dict(study.artifacts),
     }
     if include_papers:
         result["papers"] = [{
@@ -187,6 +211,15 @@ def research_study_dict(study: ResearchStudy, include_papers: bool = True) -> di
             },
         } for item in study.papers]
     return result
+
+
+def _artifact_dict(artifact: ResearchStudyArtifact | None) -> dict[str, Any] | None:
+    if not artifact:
+        return None
+    return {"taxonomy": json.loads(artifact.taxonomy_json or "[]"), "comparison": json.loads(artifact.comparison_json or "[]"),
+            "research_routes": json.loads(artifact.research_routes_json or "[]"), "representative_works": json.loads(artifact.representative_works_json or "[]"),
+            "controversies": json.loads(artifact.controversies_json or "[]"), "gaps": json.loads(artifact.gaps_json or "[]"),
+            "cited_review_markdown": artifact.cited_review_markdown, "generated_at": artifact.generated_at.isoformat()}
 
 
 def _score(value: Any, fallback: float) -> float:
