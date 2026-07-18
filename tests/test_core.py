@@ -40,6 +40,7 @@ from backend.app.recommendation_pipeline import (
 from backend.app.llm import LLMClient, provider_defaults
 from backend.app.schemas import SettingsUpdate
 from backend.app.settings_service import get_settings, update_settings
+from backend.app.scheduler import daily_recommendation_lanes
 from backend.app.usage_service import token_usage_stats
 from backend.app.zotero_service import ZoteroService
 from backend.app.domain_sources import test_source_config as probe_domain_source
@@ -118,6 +119,27 @@ def test_recommendation_pipeline_interfaces_and_permanent_filter():
         assert accepted == [fresh]
     finally:
         db.delete(paper); db.commit(); db.close()
+
+
+def test_daily_plan_supports_custom_profiles_and_exact_quota():
+    db = SessionLocal()
+    profile = ResearchProfile(
+        name="Daily fixture direction", domain="ai", description="A fixture-only focused direction for scheduler tests.",
+        positive_keywords_json='["agent evaluation"]', negative_keywords_json="[]", seed_papers_json="[]", enabled=True,
+    )
+    ai_tag = Tag(slug=f"daily-fixture-{uuid.uuid4().hex[:8]}", name_zh="测试方向", name_en="Fixture", query="agent evaluation", arxiv_categories_json='["cs.AI"]', enabled=True)
+    db.add_all([profile, ai_tag]); db.commit()
+    try:
+        lanes = daily_recommendation_lanes(db, {
+            "daily_count": 5, "daily_tag_ids": [ai_tag.id], "daily_profile_ids": [profile.id],
+            "daily_profile_mode": "mixed", "timezone": "Asia/Shanghai",
+        })
+        assert sum(lane["count"] for lane in lanes) == 5
+        assert lanes[0]["profile_id"] == profile.id
+        assert lanes[0]["mode"] == "mixed"
+        assert any(lane["mode"] == "broad" for lane in lanes)
+    finally:
+        db.delete(profile); db.delete(ai_tag); db.commit(); db.close()
 
 
 def test_venue_detection_requires_explicit_publication_signal_upstream():

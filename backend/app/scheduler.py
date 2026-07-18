@@ -9,7 +9,8 @@ from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import select
 
 from .database import SessionLocal
-from .models import RecommendationBatch
+from .catalog import tag_domain
+from .models import RecommendationBatch, ResearchProfile, Tag
 from .library_folder_service import LibraryFolderService
 from .recommendation import RecommendationService
 from .settings_service import get_settings
@@ -54,10 +55,13 @@ def run_daily_recommendation(triggered_by: str = "schedule") -> None:
         settings = get_settings(db)
         if not settings.get("daily_enabled"):
             return
-        tag_ids = settings.get("daily_tag_ids") or []
-        if not tag_ids or _already_ran_today(db, settings["timezone"]):
+        if _already_ran_today(db, settings["timezone"]):
             return
-        asyncio.run(RecommendationService(db).generate(tag_ids, int(settings.get("daily_count", 5)), triggered_by))
+        for lane in daily_recommendation_lanes(db, settings):
+            asyncio.run(RecommendationService(db).generate(
+                lane["tag_ids"], lane["count"], triggered_by,
+                profile_id=lane["profile_id"], mode=lane["mode"],
+            ))
     finally:
         db.close()
 
@@ -89,7 +93,7 @@ def _schedule_startup_catchup() -> None:
     db = SessionLocal()
     try:
         settings = get_settings(db)
-        if not settings.get("daily_enabled") or not settings.get("daily_tag_ids"):
+        if not settings.get("daily_enabled") or not (settings.get("daily_tag_ids") or settings.get("daily_profile_ids")):
             return
         now = datetime.now(ZoneInfo(settings["timezone"]))
         scheduled_hour, scheduled_minute = map(int, settings["daily_time"].split(":"))
@@ -110,3 +114,48 @@ def _already_ran_today(db, timezone_name: str) -> bool:
         if value.astimezone(tz).date() == today:
             return True
     return False
+
+
+def daily_recommendation_lanes(db, settings: dict) -> list[dict]:
+    """Build an exact-size daily plan from broad tags and custom profiles.
+
+    Profiles are rotated by day so a small daily quota does not permanently hide
+    later selections. AI profiles remain first-class and are considered before
+    other domains. Disabled/deleted profiles and unusable domains are skipped.
+    """
+    total = max(1, min(30, int(settings.get("daily_count", 5))))
+    selected_tag_ids = list(dict.fromkeys(int(item) for item in (settings.get("daily_tag_ids") or [])))
+    selected_profile_ids = list(dict.fromkeys(int(item) for item in (settings.get("daily_profile_ids") or [])))
+    enabled_tags = list(db.scalars(select(Tag).where(Tag.enabled.is_(True))).all())
+    selected_tags = [tag for tag in enabled_tags if tag.id in selected_tag_ids]
+    tags_by_domain: dict[str, list[int]] = {}
+    for tag in enabled_tags:
+        tags_by_domain.setdefault(tag_domain(tag.slug), []).append(tag.id)
+
+    profiles = list(db.scalars(select(ResearchProfile).where(
+        ResearchProfile.id.in_(selected_profile_ids), ResearchProfile.enabled.is_(True)
+    )).all()) if selected_profile_ids else []
+    position = {profile_id: index for index, profile_id in enumerate(selected_profile_ids)}
+    profiles.sort(key=lambda item: position.get(item.id, 10_000))
+    ai_profiles = [item for item in profiles if item.domain == "ai"]
+    other_profiles = [item for item in profiles if item.domain != "ai"]
+    if other_profiles:
+        day = datetime.now(ZoneInfo(settings.get("timezone", "Asia/Shanghai"))).date().toordinal()
+        offset = day % len(other_profiles)
+        other_profiles = other_profiles[offset:] + other_profiles[:offset]
+
+    lanes: list[dict] = []
+    for profile in [*ai_profiles, *other_profiles]:
+        profile_tags = [tag.id for tag in selected_tags if tag_domain(tag.slug) == profile.domain]
+        profile_tags = profile_tags or tags_by_domain.get(profile.domain, [])
+        if profile_tags:
+            lanes.append({"profile_id": profile.id, "tag_ids": profile_tags, "mode": settings.get("daily_profile_mode", "mixed")})
+    if selected_tags:
+        lanes.append({"profile_id": None, "tag_ids": [tag.id for tag in selected_tags], "mode": "broad"})
+    lanes = lanes[:total]
+    if not lanes:
+        return []
+    quotient, remainder = divmod(total, len(lanes))
+    for index, lane in enumerate(lanes):
+        lane["count"] = quotient + (1 if index < remainder else 0)
+    return lanes
