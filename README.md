@@ -79,8 +79,8 @@ http://127.0.0.1:8000/docs
 
 项目已经提供原生桌面窗口封装，前端、后端与本地数据库会随应用一起启动，不再需要手动打开终端或浏览器。桌面版数据与安装包分离：macOS 保存在 `~/Library/Application Support/PaperMorrow`，Windows 保存在 `%APPDATA%\PaperMorrow`。
 
-- 本机 macOS 构建：先安装 `requirements-desktop.txt`，再运行 `bash scripts/build_macos_app.sh`；产物为 `desktop_dist/PaperMorrow.app`。
-- Windows 构建：在 Windows PowerShell 运行 `scripts/build_windows_app.ps1`；产物为 `desktop_dist\PaperMorrow\PaperMorrow.exe`。
+- 本机 macOS 构建：先安装 `requirements-desktop.txt`，再运行 `bash scripts/build_macos_app.sh`；产物为可拖入“应用程序”的 `desktop_dist/PaperMorrow-macOS.dmg`。
+- Windows 构建：在 Windows PowerShell 运行 `scripts/build_windows_app.ps1`；产物为可双击安装的 `desktop_dist\PaperMorrow-Windows-Setup.exe`，并同时提供免安装便携压缩包。
 - GitHub Actions 中手动运行 `Build desktop apps`，可同时获得 macOS 与 Windows 构建产物。
 
 签名、公证、Windows 安装器和具体构建环境要求见 [DESKTOP_BUILD.md](DESKTOP_BUILD.md)。
