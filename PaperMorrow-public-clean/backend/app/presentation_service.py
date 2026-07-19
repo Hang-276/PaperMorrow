@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -20,6 +22,16 @@ from .presentation_models import PresentationDraft
 PRESENTATION_DIR = DATA_DIR / "presentations"
 ENGINE_DIR = ROOT_DIR / "presentation-studio"
 VALID_KINDS = {"lab-meeting", "paper-report", "research-progress", "literature-review", "experiment-report"}
+
+
+def _node_executable() -> str:
+    bundled = ROOT_DIR / "runtime" / ("node.exe" if sys.platform == "win32" else "node")
+    if bundled.is_file():
+        return str(bundled)
+    installed = shutil.which("node")
+    if installed:
+        return installed
+    raise RuntimeError("演示文稿引擎不可用：未找到内置 Node 运行时。请重新安装 PaperMorrow。")
 
 
 def _safe_json(value: str | None, fallback: Any) -> Any:
@@ -191,10 +203,13 @@ def render_presentation(db: Session, draft: PresentationDraft) -> PresentationDr
     spec_path.write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
     cli = ENGINE_DIR / "dist" / "src" / "cli.js"
     if not cli.exists():
-        subprocess.run(["npm", "run", "build"], cwd=ENGINE_DIR, check=True, capture_output=True, text=True, timeout=120)
+        npm = shutil.which("npm")
+        if not npm:
+            raise RuntimeError("演示文稿引擎文件不完整，请重新安装 PaperMorrow。")
+        subprocess.run([npm, "run", "build"], cwd=ENGINE_DIR, check=True, capture_output=True, text=True, timeout=120)
     draft.status = "generating"; draft.error = None; db.commit()
     try:
-        result = subprocess.run(["node", str(cli), str(spec_path), str(output_path)], cwd=ENGINE_DIR, check=False, capture_output=True, text=True, timeout=180)
+        result = subprocess.run([_node_executable(), str(cli), str(spec_path), str(output_path)], cwd=ENGINE_DIR, check=False, capture_output=True, text=True, timeout=180)
         if result.returncode != 0 or not output_path.exists():
             raise RuntimeError((result.stderr or result.stdout or "PPTX 生成失败")[-3000:])
         draft.deck_spec_json = json.dumps(spec, ensure_ascii=False)
