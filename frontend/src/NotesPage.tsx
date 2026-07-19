@@ -10,9 +10,7 @@ import PresentationOutlineEditor from './PresentationOutlineEditor'
 import MarkdownLiveEditor from './MarkdownLiveEditor'
 
 const blankMarkdown = `# 新笔记\n\n从一个问题、想法或阅读线索开始。\n\n## 关键发现\n\n`
-const blankLatex = `\\documentclass[UTF8]{ctexart}\n\\usepackage{amsmath,amssymb,graphicx}\n\\title{新笔记}\n\\begin{document}\n\\maketitle\n\n\\section{研究问题}\n\n\\end{document}\n`
-
-const formatLabels: Record<NoteFormat, string> = { markdown: 'Markdown', latex: 'LaTeX' }
+const formatLabels: Record<NoteFormat, string> = { markdown: 'Markdown', latex: '历史 LaTeX · 只读' }
 const artifactMeta = {
   flowchart: { label: '生成流程图', icon: GitBranch },
   mindmap: { label: '生成思维导图', icon: Network },
@@ -25,30 +23,15 @@ function dateLabel(value?: string) {
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date)
 }
 
-function LatexEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const [preview, setPreview] = useState(true)
-  const documentBody = value.match(/\\begin\{document\}([\s\S]*?)\\end\{document\}/)?.[1]?.trim() || value
-  return <div className={`notes-latex-editor ${preview ? '' : 'source-only'}`}>
-    <div className="notes-view-switch"><button className={!preview ? 'active' : ''} onClick={() => setPreview(false)}>源码</button><button className={preview ? 'active' : ''} onClick={() => setPreview(true)}>源码与预览</button></div>
-    <textarea className="notes-source" value={value} onChange={event => onChange(event.target.value)} spellCheck={false}/>
-    {preview && <article className="notes-latex-preview"><span>排版预览</span><pre>{documentBody}</pre><small>导出时将使用完整 LaTeX 引擎排版公式、引用与图表。</small></article>}
-  </div>
-}
-
-function CreateNoteDialog({ onClose, onCreate }: { onClose: () => void; onCreate: (title: string, format: NoteFormat, mode: NoteEditorMode) => Promise<void> }) {
+function CreateNoteDialog({ onClose, onCreate }: { onClose: () => void; onCreate: (title: string, mode: NoteEditorMode) => Promise<void> }) {
   const [title, setTitle] = useState('')
-  const [format, setFormat] = useState<NoteFormat>('markdown')
   const [mode, setMode] = useState<NoteEditorMode>('standard')
   const [busy, setBusy] = useState(false)
   return <div className="notes-dialog-backdrop" onMouseDown={onClose}><section className="notes-dialog" onMouseDown={event => event.stopPropagation()}>
-    <header><div><span>NEW NOTE</span><h3>创建学习笔记</h3><p>选择适合当前工作的写作方式，之后仍可继续调整。</p></div><button onClick={onClose}><X/></button></header>
+    <header><div><span>NEW NOTE</span><h3>创建 Markdown 学习笔记</h3><p>公式可直接使用 LaTeX 语法写入 Markdown，笔记始终保持便携、可检索。</p></div><button onClick={onClose}><X/></button></header>
     <label>笔记名称<input autoFocus value={title} onChange={event => setTitle(event.target.value)} placeholder="例如：多模态 Agent 的评测设计"/></label>
-    <div className="notes-format-grid">
-      <button className={format === 'markdown' ? 'selected' : ''} onClick={() => setFormat('markdown')}><FileText/><strong>Markdown</strong><span>适合阅读记录、研究思路与组会材料</span></button>
-      <button className={format === 'latex' ? 'selected' : ''} onClick={() => setFormat('latex')}><FileCode2/><strong>LaTeX</strong><span>适合公式密集的推导与正式技术文稿</span></button>
-    </div>
-    {format === 'markdown' && <div className="notes-mode-choice"><span>编辑界面</span><div><button className={mode === 'standard' ? 'active' : ''} onClick={() => setMode('standard')}>常规 · 完整工具</button><button className={mode === 'professional' ? 'active' : ''} onClick={() => setMode('professional')}>专业 · 极简写作</button></div></div>}
-    <footer><button onClick={onClose}>取消</button><button className="primary" disabled={!title.trim() || busy} onClick={async () => { setBusy(true); await onCreate(title.trim(), format, mode).finally(() => setBusy(false)) }}>{busy && <LoaderCircle className="spin"/>}开始记录</button></footer>
+    <div className="notes-mode-choice"><span>编辑界面</span><div><button className={mode === 'standard' ? 'active' : ''} onClick={() => setMode('standard')}>常规 · 完整工具</button><button className={mode === 'professional' ? 'active' : ''} onClick={() => setMode('professional')}>专业 · 极简写作</button></div></div>
+    <footer><button onClick={onClose}>取消</button><button className="primary" disabled={!title.trim() || busy} onClick={async () => { setBusy(true); await onCreate(title.trim(), mode).finally(() => setBusy(false)) }}>{busy && <LoaderCircle className="spin"/>}开始记录</button></footer>
   </section></div>
 }
 
@@ -85,6 +68,17 @@ export default function NotesPage({focusPaperId}:{focusPaperId?:number|null}) {
     }).catch(error => setNotice(error instanceof Error ? error.message : '暂时无法加载笔记'))
   }, [focusPaperId])
 
+  useEffect(() => {
+    const receiveExternalUpdate = (event: Event) => {
+      const updated = (event as CustomEvent<UnifiedNote>).detail
+      if (!updated?.id) return
+      setNotes(items => items.some(note => note.id === updated.id) ? items.map(note => note.id === updated.id ? updated : note) : [updated, ...items])
+      setSaveState('saved')
+    }
+    window.addEventListener('papermorrow:note-updated', receiveExternalUpdate)
+    return () => window.removeEventListener('papermorrow:note-updated', receiveExternalUpdate)
+  }, [])
+
   const updateLocal = (values: Partial<UnifiedNote>) => {
     if (!activeId) return
     setNotes(items => items.map(note => note.id === activeId ? { ...note, ...values } : note))
@@ -98,8 +92,8 @@ export default function NotesPage({focusPaperId}:{focusPaperId?:number|null}) {
     return () => window.clearTimeout(timer)
   }, [active?.title, active?.content, active?.editor_mode, active?.paper_ids.join(','), activeId, saveState])
 
-  const createNote = async (title: string, format: NoteFormat, mode: NoteEditorMode) => {
-    const created = await api<UnifiedNote>('/api/notes', { method: 'POST', body: JSON.stringify({ title, document_format: format, editor_mode: format === 'latex' ? 'professional' : mode, origin: 'standalone', content: format === 'latex' ? blankLatex : blankMarkdown, paper_ids: [] }) })
+  const createNote = async (title: string, mode: NoteEditorMode) => {
+    const created = await api<UnifiedNote>('/api/notes', { method: 'POST', body: JSON.stringify({ title, document_format: 'markdown', editor_mode: mode, origin: 'standalone', content: blankMarkdown, paper_ids: [] }) })
     setNotes(items => [created, ...items]); setActiveId(created.id); setCreating(false)
   }
   const createArtifact = async (type: keyof typeof artifactMeta) => {
@@ -122,17 +116,19 @@ export default function NotesPage({focusPaperId}:{focusPaperId?:number|null}) {
       <div className="notes-list">{filtered.map(note => <button key={note.id} className={note.id === activeId ? 'active' : ''} onClick={() => { setActiveId(note.id); if (window.innerWidth <= 680) setSidebarOpen(false) }}><i>{note.document_format === 'latex' ? <FileCode2/> : <FileText/>}</i><div><strong>{note.title}</strong><span>{formatLabels[note.document_format]} · {note.paper_ids.length ? `${note.paper_ids.length} 篇引用` : '独立笔记'}</span><small>{dateLabel(note.updated_at)}</small></div><ChevronRight/></button>)}{!filtered.length && <div className="notes-list-empty"><FileText/><strong>{query ? '没有匹配的笔记' : '写下第一条研究线索'}</strong><span>{query ? '尝试更换关键词。' : '笔记可以独立创建，也可以从论文阅读器进入。'}</span></div>}</div>
     </aside>
     <main className="notes-workspace">
-      {!active ? <div className="notes-welcome"><div><Braces/></div><span>RESEARCH MEMORY</span><h2>让阅读、推导与灵感留在同一处</h2><p>使用 Markdown 或 LaTeX 记录研究过程，引用学习库论文，并继续生成流程图、思维导图与组会材料。</p><button className="primary" onClick={() => setCreating(true)}><Plus/>创建第一篇笔记</button></div> : <>
+      {!active ? <div className="notes-welcome"><div><Braces/></div><span>RESEARCH MEMORY</span><h2>让阅读、推导与灵感留在同一处</h2><p>使用 Markdown 记录研究过程、插入公式、引用学习库论文，并继续生成流程图、思维导图与组会材料。</p><button className="primary" onClick={() => setCreating(true)}><Plus/>创建第一篇笔记</button></div> : <>
         <header className="notes-editor-head">
           <button className="notes-sidebar-toggle" onClick={() => setSidebarOpen(value => !value)} title={sidebarOpen ? '收起笔记列表' : '展开笔记列表'}><PanelLeftClose/></button>
-          <div className="notes-title-field"><input value={active.title} onChange={event => updateLocal({ title: event.target.value })}/><span>{formatLabels[active.document_format]} · {active.origin === 'reader' ? '来自论文阅读' : '独立笔记'} · {saveState === 'saved' ? '已保存' : saveState === 'saving' ? '正在保存' : '保存遇到问题'}</span></div>
+          <div className="notes-title-field"><input readOnly={active.document_format === 'latex'} value={active.title} onChange={event => updateLocal({ title: event.target.value })}/><span>{formatLabels[active.document_format]} · {active.origin === 'reader' ? '来自论文阅读' : '独立笔记'} · {active.document_format === 'latex' ? '内容已完整保留' : saveState === 'saved' ? '已保存' : saveState === 'saving' ? '正在保存' : '保存遇到问题'}</span></div>
           {active.document_format === 'markdown' && <div className="notes-mode-toggle" title="两种模式都使用逐行 Markdown 实时编辑"><button className={active.editor_mode === 'standard' ? 'active' : ''} onClick={() => updateLocal({ editor_mode: 'standard' })}>常规</button><button className={active.editor_mode === 'professional' ? 'active' : ''} onClick={() => updateLocal({ editor_mode: 'professional' })}><Code2/>专业</button></div>}
         </header>
-        <div className="notes-reference-bar"><button onClick={() => setPickingPapers(true)}><BookOpen/><span>{active.paper_ids.length ? `已引用 ${active.paper_ids.length} 篇论文` : '引用学习库论文'}</span><Plus/></button>{active.papers?.slice(0, 3).map(paper => <span key={paper.id}>{paper.title_zh || paper.title}</span>)}</div>
+        {active.document_format === 'markdown' && <div className="notes-reference-bar"><button onClick={() => setPickingPapers(true)}><BookOpen/><span>{active.paper_ids.length ? `已引用 ${active.paper_ids.length} 篇论文` : '引用学习库论文'}</span><Plus/></button>{active.papers?.slice(0, 3).map(paper => <span key={paper.id}>{paper.title_zh || paper.title}</span>)}</div>}
         <div className="notes-editor-body" key={`${active.id}-${active.editor_mode}`}>
-          {active.document_format === 'latex' ? <LatexEditor value={active.content} onChange={content => updateLocal({ content })}/> : <MarkdownLiveEditor value={active.content} mode={active.editor_mode} onChange={content => updateLocal({ content })} onInsertPaper={() => setPickingPapers(true)}/>}
+          {active.document_format === 'latex'
+            ? <section className="notes-legacy-readonly"><FileCode2/><span>LEGACY NOTE</span><h3>LaTeX 编辑功能已暂停</h3><p>这篇历史笔记的原始内容已完整保留。你可以复制源码继续使用；PaperMorrow 不会自动转换或覆盖它。</p><button onClick={() => navigator.clipboard.writeText(active.content).then(() => setNotice('LaTeX 源码已复制'))}>复制原始源码</button><pre>{active.content}</pre></section>
+            : <MarkdownLiveEditor value={active.content} mode={active.editor_mode} onChange={content => updateLocal({ content })} onInsertPaper={() => setPickingPapers(true)}/>}
         </div>
-        <footer className="notes-create-bar"><div><Sparkles/><span><strong>把笔记变成研究表达</strong><small>生成内容会保留当前笔记与论文引用关系。</small></span></div><div>{(Object.entries(artifactMeta) as [keyof typeof artifactMeta, typeof artifactMeta[keyof typeof artifactMeta]][]).filter(([type]) => active.document_format === 'markdown' || type === 'presentation').map(([type, meta]) => { const Icon = meta.icon; return <button key={type} disabled={!!artifactBusy} onClick={() => createArtifact(type)}>{artifactBusy === type ? <LoaderCircle className="spin"/> : <Icon/>}{meta.label}</button> })}</div></footer>
+        {active.document_format === 'markdown' && <footer className="notes-create-bar"><div><Sparkles/><span><strong>把笔记变成研究表达</strong><small>生成内容会保留当前笔记与论文引用关系。</small></span></div><div>{(Object.entries(artifactMeta) as [keyof typeof artifactMeta, typeof artifactMeta[keyof typeof artifactMeta]][]).map(([type, meta]) => { const Icon = meta.icon; return <button key={type} disabled={!!artifactBusy} onClick={() => createArtifact(type)}>{artifactBusy === type ? <LoaderCircle className="spin"/> : <Icon/>}{meta.label}</button> })}</div></footer>}
       </>}
     </main>
     {creating && <CreateNoteDialog onClose={() => setCreating(false)} onCreate={createNote}/>} 

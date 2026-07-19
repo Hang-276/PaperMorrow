@@ -16,6 +16,7 @@ PURPOSE_LABELS = {
     "recommendation": "推荐复排",
     "analysis": "论文摘要与分析",
     "chat": "论文对话",
+    "workspace_chat": "全局助手",
     "translation": "论文翻译",
     "deepwiki": "DeepWiki",
     "other": "其他",
