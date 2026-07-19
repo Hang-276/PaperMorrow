@@ -276,6 +276,7 @@ class RecommendationService:
             if isinstance(result, Exception):
                 paper.ai_status = "failed"
                 continue
+            result = normalize_bilingual_analysis(result, paper.summary_json)
             paper.title_zh = result.get("title_zh")
             paper.abstract_zh = result.get("abstract_zh")
             paper.summary_json = json.dumps(result, ensure_ascii=False)
@@ -358,6 +359,7 @@ class RecommendationService:
     async def retry_ai(self, paper: Paper) -> Paper:
         llm = LLMClient(self.db)
         result = await llm.analyze_paper(paper.title_en, paper.abstract_en)
+        result = normalize_bilingual_analysis(result, paper.summary_json)
         paper.title_zh = result.get("title_zh")
         paper.abstract_zh = result.get("abstract_zh")
         paper.summary_json = json.dumps(result, ensure_ascii=False)
@@ -365,6 +367,50 @@ class RecommendationService:
         paper.ai_status = "completed"
         self.db.commit()
         return paper
+
+
+_BILINGUAL_SCALAR_FIELDS = ("one_sentence", "research_problem", "method", "evidence")
+_BILINGUAL_LIST_FIELDS = ("innovations", "value", "limitations", "recommended_for")
+
+
+def normalize_bilingual_analysis(result: dict[str, Any], previous_json: str | None = None) -> dict[str, Any]:
+    """Keep old analysis while upgrading new responses to the bilingual contract."""
+    previous: dict[str, Any] = {}
+    if previous_json:
+        try:
+            previous = json.loads(previous_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    merged = {**previous, **result}
+    for field in (*_BILINGUAL_SCALAR_FIELDS, *_BILINGUAL_LIST_FIELDS):
+        legacy = result.get(field)
+        old_legacy = previous.get(field)
+        zh_key, en_key = f"{field}_zh", f"{field}_en"
+        if not merged.get(zh_key):
+            candidate = legacy or previous.get(zh_key)
+            if candidate:
+                merged[zh_key] = candidate
+        if not merged.get(en_key):
+            candidate = previous.get(en_key)
+            if not candidate and _looks_english(legacy):
+                candidate = legacy
+            if not candidate and _looks_english(old_legacy):
+                candidate = old_legacy
+            if candidate:
+                merged[en_key] = candidate
+        # Compatibility for older clients and downstream project search.
+        merged[field] = merged.get(zh_key) or legacy or old_legacy
+    return merged
+
+
+def _looks_english(value: Any) -> bool:
+    if isinstance(value, list):
+        value = " ".join(str(item) for item in value)
+    if not isinstance(value, str) or not value.strip():
+        return False
+    latin = len(re.findall(r"[A-Za-z]", value))
+    cjk = len(re.findall(r"[\u3400-\u9fff]", value))
+    return latin > max(8, cjk * 2)
 
 
 def _bounded_score(value: Any) -> float:
