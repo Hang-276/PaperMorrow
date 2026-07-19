@@ -17,6 +17,7 @@ import ResearchPage from './ResearchPage'
 import DomainPacksPage from './DomainPacksPage'
 import ProjectsPage from './ProjectsPage'
 import NotesPage from './NotesPage'
+import GlobalAssistant from './GlobalAssistant'
 import './features.css'
 import './library.css'
 import type { AppSettings, Batch, ChatMessage, ChatSession, DeepWikiJob, LLMProfile, Paper, ResearchProfile, Tag, TokenUsageStats } from './types'
@@ -62,6 +63,7 @@ export default function App() {
   const [recommendMode, setRecommendMode] = useState<'broad'|'focus'|'mixed'>('broad')
   const [selectedProfileId, setSelectedProfileId] = useState<number|''>('')
   const [activeDomain, setActiveDomain] = useState<string>('ai')
+  const [assistantOpen, setAssistantOpen] = useState(false)
 
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('papermorrow-theme', theme) }, [theme])
   useEffect(() => {
@@ -185,11 +187,11 @@ export default function App() {
     <aside className={`sidebar-shell ${mobileMenu ? 'open' : ''}`}>
       <div className="brand"><div className="brand-mark"><img src="/papermorrow-logo.png" alt=""/></div><div><strong>PaperMorrow</strong><span>Read what matters next</span></div></div>
       <nav>{nav.map(([id, Icon, label]) => <button key={id} className={view === id ? 'active' : ''} onClick={() => { setView(id); setMobileMenu(false) }}><Icon size={19}/><span>{label}</span>{view === id && <ChevronRight size={16}/>}</button>)}</nav>
-      <div className="sidebar-foot"><Sparkles size={17}/><div><strong>AI 分析</strong><span>{settings?.has_llm_api_key ? '模型已连接' : '等待配置 API'}</span></div><i className={settings?.has_llm_api_key ? 'online' : ''}/></div>
+      <button className="sidebar-foot" onClick={() => setAssistantOpen(true)}><Sparkles size={17}/><div><strong>研究助手</strong><span>{settings?.has_llm_api_key ? '随时询问当前页面' : '连接模型后开始'}</span></div><i className={settings?.has_llm_api_key ? 'online' : ''}/></button>
     </aside>
 
     <main className="main-shell">
-      <header className="topbar"><button className="icon-button menu-button" onClick={() => setMobileMenu(!mobileMenu)}><Menu/></button><div><span className="eyebrow">PAPERMORROW · RESEARCH COMPANION</span><h1>{nav.find(item => item[0] === view)?.[2]}</h1></div><div className="topbar-actions"><span className="date-pill"><CalendarClock size={16}/>{new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })}</span><button className="theme-toggle" aria-label={theme === 'light' ? '切换深色模式' : '切换浅色模式'} onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>{theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}</button></div></header>
+      <header className="topbar"><button className="icon-button menu-button" onClick={() => setMobileMenu(!mobileMenu)}><Menu/></button><div><span className="eyebrow">PAPERMORROW · RESEARCH COMPANION</span><h1>{nav.find(item => item[0] === view)?.[2]}</h1></div><div className="topbar-actions"><button className="context-ai-button" aria-label="问当前页面" onClick={() => setAssistantOpen(true)}><Sparkles/><span>问当前页面</span></button><span className="date-pill"><CalendarClock size={16}/>{new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })}</span><button className="theme-toggle" aria-label={theme === 'light' ? '切换深色模式' : '切换浅色模式'} onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>{theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}</button></div></header>
 
       {message && <div className="toast"><span>{busy && <CircleDashed className="spin" size={17}/>} {message}</span><button onClick={() => setMessage('')}><X size={16}/></button></div>}
 
@@ -218,6 +220,7 @@ export default function App() {
     {wikiJob && <Suspense fallback={<div className="reader-boot"><RefreshCw className="spin" size={20}/><span>正在打开完整 Wiki…</span></div>}><WikiWorkspace job={wikiJob} fontSize={settings?.font_size || 16} onFontSizePreview={previewFontSize} onFontSizeSave={saveFontSize} onClose={() => setWikiJob(null)} onRetry={() => retryWiki(wikiJob)}/></Suspense>} 
     {chatPaper && <ChatPanel paper={chatPaper} configured={Boolean(settings?.has_llm_api_key)} onClose={() => setChatPaper(null)} onOpenSettings={() => { setChatPaper(null); setView('settings') }}/>} 
     {readerPaper && <Suspense fallback={<div className="reader-boot"><RefreshCw className="spin" size={20}/><span>正在准备智能阅读器…</span></div>}><ReaderWorkspace paper={readerPaper} configured={Boolean(settings?.has_llm_api_key)} onClose={()=>setReaderPaper(null)} onSaved={load} onOpenNotes={()=>{setNoteFocusPaperId(readerPaper.id);setView('notes')}}/></Suspense>}
+    <GlobalAssistant open={assistantOpen} onOpen={() => setAssistantOpen(true)} onClose={() => setAssistantOpen(false)} pageId={readerPaper ? 'reader' : wikiJob ? 'deepwiki' : chatPaper ? 'paper-chat' : view} pageTitle={readerPaper ? (readerPaper.title_zh || readerPaper.title_en) : wikiJob ? 'DeepWiki' : chatPaper ? (chatPaper.title_zh || chatPaper.title_en) : (nav.find(item => item[0] === view)?.[2] || 'PaperMorrow')} configured={Boolean(settings?.has_llm_api_key)} onOpenSettings={() => { setReaderPaper(null); setWikiJob(null); setChatPaper(null); setView('settings'); setAssistantOpen(false) }}/>
   </div>
 }
 

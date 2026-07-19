@@ -1123,3 +1123,28 @@ def test_grounded_graph_and_reproduction_status_contract():
         db.query(ReproductionCheck).filter_by(paper_id=paper.id).delete(synchronize_session=False)
         db.query(PaperResource).filter_by(paper_id=paper.id).delete(synchronize_session=False)
         db.delete(edge); db.delete(paper_node); db.delete(method_node); db.delete(paper); db.commit(); db.close()
+
+
+def test_workspace_assistant_receives_current_page_context(monkeypatch):
+    class FixtureWorkspaceLLM:
+        def __init__(self, db):
+            self.db = db
+
+        async def chat_about_workspace(self, page_title, context, messages):
+            assert page_title == "研究项目"
+            assert "只属于当前项目的实验结论" in context
+            assert messages[-1] == {"role": "user", "content": "下一步应该验证什么？"}
+            return "建议先复现实验二，并把结果写入项目记录。"
+
+    monkeypatch.setattr("backend.app.api.LLMClient", FixtureWorkspaceLLM)
+    with TestClient(app) as client:
+        response = client.post("/api/assistant/chat", json={
+            "page_id": "projects",
+            "page_title": "研究项目",
+            "context": "只属于当前项目的实验结论：实验二尚未复现。",
+            "message": "下一步应该验证什么？",
+            "history": [],
+        })
+    assert response.status_code == 200
+    assert response.json()["answer"].startswith("建议先复现实验二")
+    assert response.json()["context"]["page_id"] == "projects"

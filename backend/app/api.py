@@ -25,7 +25,7 @@ from .recommendation import RecommendationService
 from .repository_service import RepositoryService
 from .scheduler import sync_scheduler
 from .reader_service import cached_pdf_path, reader_figure_path, save_reader_figure
-from .schemas import ChatSessionCreate, DomainPackCreate, DomainPackUpdate, DomainSearchPreviewRequest, DomainSourceTestRequest, ExperimentAnalysisRequest, ExperimentArtifactsAppend, ExperimentCreate, ExperimentMetricsAppend, ExperimentUpdate, GenerateRequest, KnowledgeEdgeCreate, KnowledgeNodeCreate, LibraryFolderCreate, LibraryImportRequest, LibraryPaperFoldersRequest, LibraryPaperTagsRequest, LibraryScanRequest, LibraryTagCreate, LibraryTagUpdate, LLMProfileCreate, LLMProfileUpdate, NoteRequest, PaperChatRequest, PaperEvidenceUpdate, PaperResourceCreate, PaperVersionLinkRequest, ReaderFigureRequest, ReaderTranslateRequest, RepositoryBindRequest, ResearchProfileCreate, ResearchProfileUpdate, ResearchProjectChatRequest, ResearchProjectCreate, ResearchProjectNoteCreate, ResearchProjectPaperRequest, ResearchProjectPaperUpdate, ResearchProjectSearchRequest, ResearchProjectUpdate, ResearchStudyCreate, SettingsUpdate, StudyStateRequest
+from .schemas import ChatSessionCreate, DomainPackCreate, DomainPackUpdate, DomainSearchPreviewRequest, DomainSourceTestRequest, ExperimentAnalysisRequest, ExperimentArtifactsAppend, ExperimentCreate, ExperimentMetricsAppend, ExperimentUpdate, GenerateRequest, KnowledgeEdgeCreate, KnowledgeNodeCreate, LibraryFolderCreate, LibraryImportRequest, LibraryPaperFoldersRequest, LibraryPaperTagsRequest, LibraryScanRequest, LibraryTagCreate, LibraryTagUpdate, LLMProfileCreate, LLMProfileUpdate, NoteRequest, PaperChatRequest, PaperEvidenceUpdate, PaperResourceCreate, PaperVersionLinkRequest, ReaderFigureRequest, ReaderTranslateRequest, RepositoryBindRequest, ResearchProfileCreate, ResearchProfileUpdate, ResearchProjectChatRequest, ResearchProjectCreate, ResearchProjectNoteCreate, ResearchProjectPaperRequest, ResearchProjectPaperUpdate, ResearchProjectSearchRequest, ResearchProjectUpdate, ResearchStudyCreate, SettingsUpdate, StudyStateRequest, WorkspaceChatRequest
 from .serializers import batch_dict, job_dict, library_tag_dict, paper_dict, research_profile_dict, tag_dict
 from .settings_service import delete_llm_profile_key, get_active_llm_profile, get_settings, list_llm_profiles, llm_profile_dict, save_llm_profile_key, save_secrets, update_settings
 from .usage_service import token_usage_stats
@@ -45,6 +45,23 @@ router = APIRouter(prefix="/api")
 @router.get("/system/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "PaperMorrow"}
+
+
+@router.post("/assistant/chat")
+async def workspace_chat(payload: WorkspaceChatRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Discuss only the user-visible context supplied by the current product page."""
+    messages = [item.model_dump() for item in payload.history]
+    messages.append({"role": "user", "content": payload.message})
+    try:
+        answer = await LLMClient(db).chat_about_workspace(payload.page_title, payload.context, messages)
+    except LLMNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail="模型接口暂时不可用，请稍后重试") from exc
+    return {
+        "answer": answer,
+        "context": {"page_id": payload.page_id, "page_title": payload.page_title, "characters": len(payload.context)},
+    }
 
 
 @router.get("/tags")

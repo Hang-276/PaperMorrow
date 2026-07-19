@@ -62,3 +62,21 @@ def test_note_api_unifies_reader_and_standalone_notes_with_citations():
         artifact = client.post(f"/api/notes/{standalone.json()['id']}/artifacts", json={"type": "flowchart"})
         assert artifact.status_code == 201
         assert artifact.json()["content"].startswith("flowchart TD")
+
+        appended = client.post(f"/api/notes/{standalone.json()['id']}/append", json={
+            "content": "这段结论来自当前项目页面。",
+            "source_label": "研究项目 · AI 回复",
+        })
+        assert appended.status_code == 200
+        assert "# 研究问题" in appended.json()["content"]
+        assert "## 研究项目 · AI 回复" in appended.json()["content"]
+        assert "这段结论来自当前项目页面。" in appended.json()["content"]
+
+        legacy_latex = client.post("/api/notes", json={
+            "title": "历史公式笔记", "document_format": "latex", "editor_mode": "professional",
+            "content": "\\begin{document}不可覆盖\\end{document}", "paper_ids": [],
+        })
+        blocked = client.post(f"/api/notes/{legacy_latex.json()['id']}/append", json={"content": "不应写入"})
+        assert blocked.status_code == 422
+        unchanged = client.get("/api/notes").json()
+        assert next(item for item in unchanged if item["id"] == legacy_latex.json()["id"])["content"] == "\\begin{document}不可覆盖\\end{document}"

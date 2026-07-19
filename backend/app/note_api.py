@@ -34,6 +34,11 @@ class NoteUpdate(BaseModel):
     paper_ids: list[int] | None = None
 
 
+class NoteAppend(BaseModel):
+    content: str = Field(min_length=1, max_length=100_000)
+    source_label: str = Field(default="AI 助手", max_length=200)
+
+
 class ArtifactRequest(BaseModel):
     type: Literal["flowchart", "mindmap", "presentation"]
     instructions: str = ""
@@ -96,6 +101,20 @@ def update_note(note_id: int, payload: NoteUpdate, db: Session = Depends(get_db)
             set_note_papers(db, note, payload.paper_ids)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+    sync_legacy_from_note(db, note)
+    db.commit()
+    return note_dict(_note_or_404(db, note.id), db)
+
+
+@router.post("/{note_id}/append")
+def append_to_note(note_id: int, payload: NoteAppend, db: Session = Depends(get_db)) -> dict:
+    note = _note_or_404(db, note_id)
+    if note.document_format != "markdown":
+        raise HTTPException(status_code=422, detail="只能将 AI 回复写入 Markdown 笔记")
+    source = payload.source_label.strip() or "AI 助手"
+    source = " ".join(source.splitlines())
+    addition = f"## {source}\n\n{payload.content.strip()}\n"
+    note.content = f"{note.content.rstrip()}\n\n{addition}" if note.content.strip() else addition
     sync_legacy_from_note(db, note)
     db.commit()
     return note_dict(_note_or_404(db, note.id), db)
