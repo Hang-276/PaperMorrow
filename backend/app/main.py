@@ -9,6 +9,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api import router
+from .note_api import router as note_router
+from .presentation_api import router as presentation_router
 from .catalog import seed_catalog
 from .config import ROOT_DIR
 from .database import SessionLocal, init_db
@@ -48,6 +50,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(router)
+app.include_router(note_router)
+app.include_router(presentation_router)
 
 dist_dir = ROOT_DIR / "frontend" / "dist"
 if dist_dir.exists():

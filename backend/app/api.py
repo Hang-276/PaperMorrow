@@ -18,14 +18,14 @@ from .domain_sources import test_source_config
 from .library_service import LibraryService, normalize_library_tag
 from .library_folder_service import LibraryFolderService
 from .llm import LLMClient, LLMNotConfigured
-from .models import ChatMessage, ChatSession, DeepWikiJob, DomainPack, LibraryEntry, LibraryTag, LLMProfile, Paper, PaperNote, PaperStudyState, Recommendation, RecommendationBatch, ResearchProfile, ResearchProject, ResearchProjectNote, ResearchProjectPaper, ResearchProjectStudy, ResearchStudy, Tag, ZoteroLink
+from .models import ChatMessage, ChatSession, DeepWikiJob, DomainPack, ExperimentAnalysis, LibraryEntry, LibraryTag, LLMProfile, Paper, PaperNote, PaperStudyState, Recommendation, RecommendationBatch, ResearchProfile, ResearchProject, ResearchProjectNote, ResearchProjectPaper, ResearchProjectStudy, ResearchStudy, Tag, ZoteroLink
 from .paper_sources import SemanticScholarSource
 from .paper_document_service import get_or_extract_paper_text
 from .recommendation import RecommendationService
 from .repository_service import RepositoryService
 from .scheduler import sync_scheduler
 from .reader_service import cached_pdf_path, reader_figure_path, save_reader_figure
-from .schemas import ChatSessionCreate, DomainPackCreate, DomainPackUpdate, DomainSearchPreviewRequest, DomainSourceTestRequest, GenerateRequest, KnowledgeEdgeCreate, KnowledgeNodeCreate, LibraryFolderCreate, LibraryImportRequest, LibraryPaperFoldersRequest, LibraryPaperTagsRequest, LibraryScanRequest, LibraryTagCreate, LibraryTagUpdate, LLMProfileCreate, LLMProfileUpdate, NoteRequest, PaperChatRequest, PaperEvidenceUpdate, PaperResourceCreate, PaperVersionLinkRequest, ReaderFigureRequest, ReaderTranslateRequest, RepositoryBindRequest, ResearchProfileCreate, ResearchProfileUpdate, ResearchProjectChatRequest, ResearchProjectCreate, ResearchProjectNoteCreate, ResearchProjectPaperRequest, ResearchProjectPaperUpdate, ResearchProjectSearchRequest, ResearchProjectUpdate, ResearchStudyCreate, SettingsUpdate, StudyStateRequest
+from .schemas import ChatSessionCreate, DomainPackCreate, DomainPackUpdate, DomainSearchPreviewRequest, DomainSourceTestRequest, ExperimentAnalysisRequest, ExperimentArtifactsAppend, ExperimentCreate, ExperimentMetricsAppend, ExperimentUpdate, GenerateRequest, KnowledgeEdgeCreate, KnowledgeNodeCreate, LibraryFolderCreate, LibraryImportRequest, LibraryPaperFoldersRequest, LibraryPaperTagsRequest, LibraryScanRequest, LibraryTagCreate, LibraryTagUpdate, LLMProfileCreate, LLMProfileUpdate, NoteRequest, PaperChatRequest, PaperEvidenceUpdate, PaperResourceCreate, PaperVersionLinkRequest, ReaderFigureRequest, ReaderTranslateRequest, RepositoryBindRequest, ResearchProfileCreate, ResearchProfileUpdate, ResearchProjectChatRequest, ResearchProjectCreate, ResearchProjectNoteCreate, ResearchProjectPaperRequest, ResearchProjectPaperUpdate, ResearchProjectSearchRequest, ResearchProjectUpdate, ResearchStudyCreate, SettingsUpdate, StudyStateRequest
 from .serializers import batch_dict, job_dict, library_tag_dict, paper_dict, research_profile_dict, tag_dict
 from .settings_service import delete_llm_profile_key, get_active_llm_profile, get_settings, list_llm_profiles, llm_profile_dict, save_llm_profile_key, save_secrets, update_settings
 from .usage_service import token_usage_stats
@@ -35,6 +35,8 @@ from .research_service import ResearchService, research_study_dict
 from .project_service import PAPER_ROLES, READING_STATUSES, add_project_paper, load_project, project_dict, reindex_project, save_chat, search_project
 from .evidence_service import evidence_dict, link_versions, replace_analysis_evidence, split_version, undo_last_version_action, work_timeline
 from .knowledge_graph_service import add_resource, check_dict, create_grounded_edge, generate_reproduction_checklist, resource_dict, unified_graph, upsert_node
+from .experiment_service import analyze_experiments, append_artifacts, append_metrics, artifact_dict, create_experiment, experiment_dict, experiment_summary, list_experiments, load_experiment, metric_dict, update_experiment
+from .note_service import sync_reader_note
 
 
 router = APIRouter(prefix="/api")
@@ -529,6 +531,98 @@ async def chat_with_project(project_id: int, payload: ResearchProjectChatRequest
     return {"answer": answer, "sources": sources, "contains_ai_inference": inferred}
 
 
+@router.get("/projects/{project_id}/experiments")
+def list_project_experiments(project_id: int, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    if not db.get(ResearchProject, project_id):
+        raise HTTPException(status_code=404, detail="研究项目不存在")
+    return [experiment_dict(item) for item in list_experiments(db, project_id)]
+
+
+@router.post("/projects/{project_id}/experiments")
+def create_project_experiment(project_id: int, payload: ExperimentCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        experiment = create_experiment(db, project_id, payload.model_dump())
+        db.commit()
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return experiment_dict(load_experiment(db, experiment.id))
+
+
+@router.get("/projects/{project_id}/experiments/summary")
+def summarize_project_experiments(project_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    if not db.get(ResearchProject, project_id):
+        raise HTTPException(status_code=404, detail="研究项目不存在")
+    return experiment_summary(db, project_id)
+
+
+@router.post("/projects/{project_id}/experiments/analyze")
+async def analyze_project_experiment_history(project_id: int, payload: ExperimentAnalysisRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+    if not db.get(ResearchProject, project_id):
+        raise HTTPException(status_code=404, detail="研究项目不存在")
+    result = await analyze_experiments(db, project_id, payload.question)
+    db.commit()
+    return result
+
+
+@router.get("/projects/{project_id}/experiments/analyses")
+def list_project_experiment_analyses(project_id: int, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    if not db.get(ResearchProject, project_id):
+        raise HTTPException(status_code=404, detail="研究项目不存在")
+    rows = db.scalars(
+        select(ExperimentAnalysis)
+        .where(ExperimentAnalysis.project_id == project_id)
+        .order_by(desc(ExperimentAnalysis.created_at), desc(ExperimentAnalysis.id))
+        .limit(100)
+    ).all()
+    return [{
+        "id": item.id, "project_id": item.project_id, "question": item.question, "answer": item.answer,
+        "sources": json.loads(item.sources_json or "[]"), "used_llm": item.used_llm, "created_at": item.created_at,
+    } for item in rows]
+
+
+@router.get("/projects/{project_id}/experiments/{experiment_id}")
+def read_project_experiment(project_id: int, experiment_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    experiment = load_experiment(db, experiment_id)
+    if not experiment or experiment.project_id != project_id:
+        raise HTTPException(status_code=404, detail="实验记录不存在")
+    return experiment_dict(experiment)
+
+
+@router.put("/projects/{project_id}/experiments/{experiment_id}")
+def update_project_experiment(project_id: int, experiment_id: int, payload: ExperimentUpdate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    experiment = load_experiment(db, experiment_id)
+    if not experiment or experiment.project_id != project_id:
+        raise HTTPException(status_code=404, detail="实验记录不存在")
+    try:
+        update_experiment(db, experiment, payload.model_dump(exclude_unset=True))
+        db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return experiment_dict(load_experiment(db, experiment_id))
+
+
+@router.post("/projects/{project_id}/experiments/{experiment_id}/metrics")
+def add_project_experiment_metrics(project_id: int, experiment_id: int, payload: ExperimentMetricsAppend, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    experiment = load_experiment(db, experiment_id)
+    if not experiment or experiment.project_id != project_id:
+        raise HTTPException(status_code=404, detail="实验记录不存在")
+    metrics = append_metrics(db, experiment, [item.model_dump() for item in payload.metrics])
+    db.commit()
+    return [metric_dict(item) for item in metrics]
+
+
+@router.post("/projects/{project_id}/experiments/{experiment_id}/artifacts")
+def add_project_experiment_artifacts(project_id: int, experiment_id: int, payload: ExperimentArtifactsAppend, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    experiment = load_experiment(db, experiment_id)
+    if not experiment or experiment.project_id != project_id:
+        raise HTTPException(status_code=404, detail="实验记录不存在")
+    artifacts = append_artifacts(db, experiment, [item.model_dump() for item in payload.artifacts])
+    db.commit()
+    return [artifact_dict(item) for item in artifacts]
+
+
 @router.post("/research-profiles")
 def create_research_profile(payload: ResearchProfileCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
     values = payload.model_dump()
@@ -627,13 +721,11 @@ def update_study_state(paper_id: int, payload: StudyStateRequest, db: Session = 
 @router.put("/papers/{paper_id}/note")
 def save_note(paper_id: int, payload: NoteRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
     paper = _paper_or_404(db, paper_id)
-    note = paper.note or PaperNote(paper_id=paper.id)
-    note.content = payload.content
-    db.add(note)
+    unified_note = sync_reader_note(db, paper, payload.content)
     if payload.content.strip() and not paper.library_entry:
         LibraryService(db).add_paper(paper, "note")
     db.commit()
-    return {"paper_id": paper.id, "content": note.content, "updated_at": note.updated_at.isoformat()}
+    return {"paper_id": paper.id, "note_id": unified_note.id, "content": payload.content, "updated_at": unified_note.updated_at.isoformat()}
 
 
 @router.get("/papers/{paper_id}/reader/pdf")

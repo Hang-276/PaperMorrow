@@ -218,6 +218,31 @@ The available context may contain only metadata and abstracts, not the full PDF.
             return await self._claude_chat(system, messages, "project_chat")
         return await self._openai_chat(system, messages, "project_chat")
 
+    async def analyze_project_experiments(self, experiment_context: str, question: str) -> str:
+        if not self.configured:
+            raise LLMNotConfigured("尚未配置 LLM API")
+        system = """你是科研项目中的实验分析 Agent。完整实验账本代表该项目全部实验历史，后续详情可能因长度只包含部分记录。你的任务是比较可比实验、追踪配置和指标变化、指出异常与缺失证据，并提出可验证的下一步实验。每个实验事实必须引用 [EXP-编号]。明确区分记录事实与 AI 推断；不把相关性写成因果，不虚构未记录的参数、统计显著性或实验结果。如果实验不可比，必须说明原因。回答使用简体中文 Markdown。"""
+        messages = [{"role": "user", "content": f"实验上下文：\n{experiment_context[:60000]}\n\n用户问题：{question}"}]
+        if self.provider == "claude":
+            return await self._claude_chat(system, messages, "experiment_analysis")
+        return await self._openai_chat(system, messages, "experiment_analysis")
+
+    async def generate_presentation_outline(self, evidence_pack: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
+        if not self.configured:
+            raise LLMNotConfigured("尚未配置 LLM API")
+        prompt = f"""为科研组会生成一份可编辑的演示大纲。只使用给定证据包，不补造论文方法、实验数字或项目进展。
+
+生成要求：
+{json.dumps(request, ensure_ascii=False)}
+
+证据包：
+{json.dumps(evidence_pack, ensure_ascii=False)[:60000]}
+
+返回 JSON 对象，严格包含 title、kind、language、slides。slides 是数组，每项包含 id、title、purpose、key_message、points、source_refs。points 为 1-5 条简洁要点；source_refs 只能引用证据包 sources 中已有的 id。第一页应说明汇报主题，最后一页应总结结论和下一步。论文汇报突出问题、方法、证据、局限；进度汇报突出研究问题、实验变化、当前结论和下一步。不要生成坐标、颜色、动画或 PPTX 代码。"""
+        if self.provider == "claude":
+            return await self._claude(prompt, "presentation_outline")
+        return await self._openai_compatible(prompt, "presentation_outline")
+
     async def _openai_compatible(self, prompt: str, purpose: str = "other") -> dict[str, Any]:
         url = self._chat_url()
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}

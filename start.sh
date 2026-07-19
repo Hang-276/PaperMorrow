@@ -20,4 +20,12 @@ if [ ! -f "frontend/dist/index.html" ]; then
   npm --prefix frontend run build
 fi
 
+if [ ! -d "presentation-studio/node_modules" ]; then
+  npm --prefix presentation-studio install
+fi
+
+if [ ! -f "presentation-studio/dist/src/cli.js" ]; then
+  npm --prefix presentation-studio run build
+fi
+
 exec .venv-paper/bin/python main.py
