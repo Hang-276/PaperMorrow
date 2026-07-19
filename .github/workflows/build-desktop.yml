@@ -24,7 +24,9 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: |
+            frontend/package-lock.json
+            presentation-studio/package-lock.json
       - name: Install project
         shell: bash
         run: |
@@ -32,20 +34,39 @@ jobs:
           python -m pip install -e .
           python -m pip install -r requirements-desktop.txt
           npm --prefix frontend ci
+          npm --prefix presentation-studio ci
       - name: Build frontend and icons
         shell: bash
         run: |
           npm --prefix frontend run build
+          npm --prefix presentation-studio run build
           python desktop/make_icons.py
       - name: Package application
         shell: bash
         env:
           PYINSTALLER_CONFIG_DIR: ${{ github.workspace }}/.pyinstaller-cache
         run: python -m PyInstaller --noconfirm --clean --distpath desktop_dist --workpath desktop_build desktop/PaperMorrow.spec
+      - name: Create macOS disk image
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          codesign --force --deep --sign - desktop_dist/PaperMorrow.app
+          mkdir -p desktop_build/dmg
+          cp -R desktop_dist/PaperMorrow.app desktop_build/dmg/PaperMorrow.app
+          ln -s /Applications desktop_build/dmg/Applications
+          hdiutil create -volname PaperMorrow -srcfolder desktop_build/dmg -ov -format UDZO desktop_dist/PaperMorrow-macOS.dmg
+      - name: Create Windows installer and portable archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          Compress-Archive -Path desktop_dist\PaperMorrow -DestinationPath desktop_dist\PaperMorrow-Windows-Portable.zip -CompressionLevel Optimal
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=0.4.0" desktop\installer\PaperMorrow.iss
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: |
-            desktop_dist/PaperMorrow.app
-            desktop_dist/PaperMorrow
+            desktop_dist/PaperMorrow-macOS.dmg
+            desktop_dist/PaperMorrow-Windows-Setup.exe
+            desktop_dist/PaperMorrow-Windows-Portable.zip
           if-no-files-found: error

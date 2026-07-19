@@ -1,12 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
 import platform
+import shutil
 
 from PyInstaller.utils.hooks import collect_submodules
 
 ROOT = Path(SPECPATH).resolve().parent
 SYSTEM = platform.system()
 ICON = ROOT / "desktop" / "icons" / ("PaperMorrow.icns" if SYSTEM == "Darwin" else "PaperMorrow.ico")
+NODE = Path(shutil.which("node") or "")
+if not NODE.is_file():
+    raise SystemExit("Node.js 18+ is required to build the desktop package")
 
 hiddenimports = (
     collect_submodules("backend")
@@ -23,10 +27,13 @@ hiddenimports = (
 a = Analysis(
     [str(ROOT / "desktop_app.py")],
     pathex=[str(ROOT)],
-    binaries=[],
+    binaries=[(str(NODE), "runtime")],
     datas=[
         (str(ROOT / "frontend" / "dist"), "frontend/dist"),
         (str(ROOT / "backend" / "prompts"), "backend/prompts"),
+        (str(ROOT / "presentation-studio" / "dist"), "presentation-studio/dist"),
+        (str(ROOT / "presentation-studio" / "node_modules"), "presentation-studio/node_modules"),
+        (str(ROOT / "presentation-studio" / "package.json"), "presentation-studio"),
     ],
     hiddenimports=hiddenimports,
     hookspath=[],
@@ -69,7 +76,7 @@ if SYSTEM == "Darwin":
         info_plist={
             "NSHighResolutionCapable": True,
             "LSMinimumSystemVersion": "12.0",
-            "CFBundleShortVersionString": "0.3.0",
-            "CFBundleVersion": "0.3.0",
+            "CFBundleShortVersionString": "0.4.0",
+            "CFBundleVersion": "0.4.0",
         },
     )
