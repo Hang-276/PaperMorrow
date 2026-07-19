@@ -61,7 +61,7 @@ jobs:
         run: |
           choco install innosetup --no-progress -y
           Compress-Archive -Path desktop_dist\PaperMorrow -DestinationPath desktop_dist\PaperMorrow-Windows-Portable.zip -CompressionLevel Optimal
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=0.4.0" desktop\installer\PaperMorrow.iss
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=0.4.1" desktop\installer\PaperMorrow.iss
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}

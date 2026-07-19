@@ -1,6 +1,6 @@
 #define AppName "PaperMorrow"
 #ifndef AppVersion
-  #define AppVersion "0.4.0"
+  #define AppVersion "0.4.1"
 #endif
 #define AppPublisher "PaperMorrow"
 #define AppExeName "PaperMorrow.exe"
