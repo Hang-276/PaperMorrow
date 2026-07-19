@@ -59,7 +59,9 @@ export default function MarkdownLiveEditor({
 
   const commit = (nextLines: string[]) => onChange(nextLines.join('\n'))
   const focusLine = (line: number, caret?: number) => {
-    const bounded = Math.max(0, Math.min(line, Math.max(lines.length - 1, 0)))
+    // Insert and paste operations can focus a line that only exists in the next render.
+    // External content shrinkage is clamped separately by the line-count effect below.
+    const bounded = Math.max(0, line)
     setActiveLine(bounded)
     window.requestAnimationFrame(() => {
       const source = sourceRef.current
