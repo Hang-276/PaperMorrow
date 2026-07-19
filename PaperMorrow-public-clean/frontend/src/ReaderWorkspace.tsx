@@ -15,7 +15,7 @@ type SideMode = 'chat'|'note'|'both'
 type TextSelection = { text:string; page:number; x:number; y:number }
 type CropState = { page:number; x:number; y:number; width:number; height:number }
 
-export default function ReaderWorkspace({ paper, configured, onClose, onSaved }: { paper:Paper; configured:boolean; onClose:()=>void; onSaved:()=>Promise<void> }) {
+export default function ReaderWorkspace({ paper, configured, onClose, onSaved, onOpenNotes }: { paper:Paper; configured:boolean; onClose:()=>void; onSaved:()=>Promise<void>; onOpenNotes?:()=>void }) {
   const [pages,setPages] = useState(0)
   const [scale,setScale] = useState(1.05)
   const [mode,setMode] = useState<SideMode>('both')
@@ -32,6 +32,7 @@ export default function ReaderWorkspace({ paper, configured, onClose, onSaved }:
 
   const saveNote = async () => { setSaved(false); await api(`/api/papers/${paper.id}/note`,{method:'PUT',body:JSON.stringify({content:note})}); setSaved(true) }
   const closeReader = async () => { try { await saveNote(); await onSaved(); onClose() } catch (error) { setStatus(error instanceof Error ? error.message : '笔记保存失败') } }
+  const openNotebook = async () => { try { await saveNote(); await onSaved(); onClose(); onOpenNotes?.() } catch (error) { setStatus(error instanceof Error ? error.message : '笔记保存失败') } }
 
   useEffect(()=>{ const timer=window.setTimeout(()=>saveNote().catch(error=>setStatus(error instanceof Error?error.message:'笔记保存失败')),700); return()=>window.clearTimeout(timer) },[note,paper.id])
 
@@ -65,7 +66,7 @@ export default function ReaderWorkspace({ paper, configured, onClose, onSaved }:
   return <div className="reader-workspace">
     <header className="reader-header"><button className="icon-button" onClick={closeReader}><ChevronLeft/></button><div><span>SMART READER</span><h1>{paper.title_en}</h1></div><div className="reader-controls"><button onClick={()=>setScale(Math.max(.65,scale-.1))}><Minus size={15}/></button><strong>{Math.round(scale*100)}%</strong><button onClick={()=>setScale(Math.min(1.8,scale+.1))}><Plus size={15}/></button><button className={figureMode?'active':''} onClick={()=>{setFigureMode(!figureMode);setSelection(null)}}><Crop size={15}/>{figureMode?'拖动框选插图':'框选插图'}</button><span>{pages||'—'} 页</span></div><button className="icon-button" aria-label="关闭阅读器" onClick={closeReader}><X/></button></header>
     <main className={`reader-layout side-${mode}`}><section className={`pdf-pane ${figureMode?'cropping':''}`} ref={readerRef} onMouseUp={captureSelection}><Document file={`/api/papers/${paper.id}/reader/pdf`} loading={<div className="reader-loading"><RefreshCw className="spin"/>正在准备论文 PDF…</div>} error={<div className="reader-loading error">无法读取公开 PDF，请使用论文原始链接。</div>} onLoadSuccess={({numPages})=>setPages(numPages)}>{Array.from({length:pages},(_,index)=>{const page=index+1;return <LazyReaderPage key={page} page={page} scale={scale} rootRef={readerRef} figureMode={figureMode} crop={crop} onCropStart={cropStart} onCropMove={cropMove} onCropEnd={cropEnd}/>})}</Document></section>
-      <aside className="reader-side"><nav><button className={mode==='chat'?'active':''} onClick={()=>setMode('chat')}><MessageCircle size={15}/>Chat</button><button className={mode==='note'?'active':''} onClick={()=>setMode('note')}><NotebookPen size={15}/>笔记</button><button className={mode==='both'?'active':''} onClick={()=>setMode('both')}><BookOpen size={15}/>同时显示</button></nav><div className={`reader-side-content ${mode}`}>{mode!=='note'&&<ReaderChat paper={paper} configured={configured} queued={pendingQuestion} onConsumed={()=>setPendingQuestion('')}/>} {mode!=='chat'&&<ReaderNotes note={note} setNote={setNote} saved={saved}/>}</div></aside>
+      <aside className="reader-side"><nav><button className={mode==='chat'?'active':''} onClick={()=>setMode('chat')}><MessageCircle size={15}/>Chat</button><button className={mode==='note'?'active':''} onClick={()=>setMode('note')}><NotebookPen size={15}/>笔记</button><button className={mode==='both'?'active':''} onClick={()=>setMode('both')}><BookOpen size={15}/>同时显示</button></nav><div className={`reader-side-content ${mode}`}>{mode!=='note'&&<ReaderChat paper={paper} configured={configured} queued={pendingQuestion} onConsumed={()=>setPendingQuestion('')}/>} {mode!=='chat'&&<ReaderNotes note={note} setNote={setNote} saved={saved} onOpenNotes={openNotebook}/>}</div></aside>
     </main>
     {selection&&<div className="selection-tools" style={{left:selection.x,top:selection.y}}><button disabled={!configured||translating} onClick={translate}><Languages size={14}/>{translating?'翻译中':'翻译'}</button><button disabled={!configured} onClick={askSelection}><Bot size={14}/>问 AI</button><button onClick={appendQuote}><FileText size={14}/>引用到笔记</button><button onClick={()=>setSelection(null)}><X size={14}/></button>{translation&&<div className="selection-translation"><span>Page {selection.page} · 中文翻译</span><p>{translation}</p><button onClick={appendQuote}><Check size={13}/>原文与翻译加入笔记</button></div>}</div>}
     {status&&<div className="reader-toast" onClick={()=>setStatus('')}>{status}</div>}
@@ -106,7 +107,7 @@ function LazyReaderPage({page,scale,rootRef,figureMode,crop,onCropStart,onCropMo
   </div>
 }
 
-function ReaderNotes({note,setNote,saved}:{note:string;setNote:(value:string)=>void;saved:boolean}){return <section className="reader-notes"><header><div><FileText size={16}/><strong>Markdown 学习笔记</strong></div><span>{saved?<><Check size={12}/>已保存</>:<><RefreshCw className="spin" size={12}/>保存中</>}</span></header><div className="reader-note-split"><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="# 研究问题\n\n从 PDF 选择文字或插图，也可以直接记录你的思考。"/><article><ReactMarkdown remarkPlugins={[remarkGfm]}>{note||'*笔记预览*'}</ReactMarkdown></article></div></section>}
+function ReaderNotes({note,setNote,saved,onOpenNotes}:{note:string;setNote:(value:string)=>void;saved:boolean;onOpenNotes:()=>void}){return <section className="reader-notes"><header><div><FileText size={16}/><strong>Markdown 学习笔记</strong></div><div><span>{saved?<><Check size={12}/>已保存</>:<><RefreshCw className="spin" size={12}/>保存中</>}</span><button className="reader-open-notebook" onClick={onOpenNotes}><NotebookPen size={12}/>完整编辑</button></div></header><div className="reader-note-split"><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="# 研究问题\n\n从 PDF 选择文字或插图，也可以直接记录你的思考。"/><article><ReactMarkdown remarkPlugins={[remarkGfm]}>{note||'*笔记预览*'}</ReactMarkdown></article></div></section>}
 
 function ReaderChat({paper,configured,queued,onConsumed}:{paper:Paper;configured:boolean;queued:string;onConsumed:()=>void}){
   const [sessions,setSessions]=useState<ChatSession[]>([]),[sessionId,setSessionId]=useState<string|null>(null),[messages,setMessages]=useState<ChatMessage[]>([]),[input,setInput]=useState(''),[sending,setSending]=useState(false),[error,setError]=useState('')

@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "1.0",
+  "metadata": {
+    "title": "Active-Zero：让视觉语言模型主动寻找学习经验",
+    "subtitle": "论文组会汇报",
+    "author": "PaperMorrow Research Group",
+    "language": "zh-CN",
+    "kind": "paper-report",
+    "origin": "ai"
+  },
+  "theme": { "accentColor": "1677FF", "fontFamily": "Arial", "monoFontFamily": "Menlo" },
+  "sources": [
+    { "id": "PAPER-001", "type": "paper", "title": "Active-Zero", "locator": "全文与实验表", "confidence": 1 },
+    { "id": "NOTE-001", "type": "note", "title": "Active-Zero 阅读笔记", "locator": "研究问题与局限", "confidence": 1 }
+  ],
+  "sections": [
+    {
+      "id": "section-problem",
+      "title": "问题与方法",
+      "objective": "让听众理解论文为何把数据选择纳入训练闭环",
+      "includeDivider": false,
+      "slides": [
+        {
+          "id": "outline-slide-thesis",
+          "title": "这项工作的关键变化是让模型主动选择下一份经验",
+          "purpose": "用一句结论建立整场汇报的判断",
+          "takeaway": "数据获取策略成为模型自我进化的一部分。",
+          "content": ["模型依据能力边界检索视觉数据", "问题生成与求解形成反馈闭环"],
+          "visualIntent": "statement",
+          "sourceRefs": ["PAPER-001"]
+        },
+        {
+          "id": "outline-slide-method",
+          "title": "三个角色协同构成主动探索闭环",
+          "purpose": "解释 Searcher、Questioner 和 Solver 的分工",
+          "content": ["Searcher：按能力前沿检索数据", "Questioner：合成校准难度的任务", "Solver：完成任务并提供优化反馈"],
+          "visualIntent": "two-column",
+          "sourceRefs": ["PAPER-001", "NOTE-001"]
+        }
+      ]
+    },
+    {
+      "id": "section-evidence",
+      "title": "证据与讨论",
+      "objective": "报告实验信号并明确仍需核验的问题",
+      "includeDivider": true,
+      "slides": [
+        {
+          "id": "outline-slide-evidence",
+          "title": "汇总结果显示提升，但还需要消融确认收益来源",
+          "purpose": "把结果数字转化为下一步阅读问题",
+          "takeaway": "性能改善是积极信号，机制因果仍需要更细证据。",
+          "content": ["报告跨基准的准确率提升", "核验检索质量与计算开销", "检查奖励校准和数据源偏差"],
+          "visualIntent": "content",
+          "sourceRefs": ["PAPER-001", "NOTE-001"]
+        }
+      ]
+    }
+  ]
+}

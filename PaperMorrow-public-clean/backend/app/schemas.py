@@ -215,6 +215,74 @@ class ResearchProjectChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
 
 
+class ExperimentMetricInput(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    value: float
+    step: int | None = Field(default=None, ge=0)
+    split: str = Field(default="", max_length=80)
+    unit: str = Field(default="", max_length=40)
+    is_primary: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    recorded_at: datetime | None = None
+
+
+class ExperimentArtifactInput(BaseModel):
+    artifact_type: Literal["file", "log", "checkpoint", "figure", "table", "dataset", "link"] = "file"
+    name: str = Field(min_length=1, max_length=300)
+    uri: str = Field(min_length=1, max_length=8000)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExperimentCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=500)
+    objective: str = Field(default="", max_length=50_000)
+    hypothesis: str = Field(default="", max_length=50_000)
+    experiment_type: Literal["run", "baseline", "ablation", "reproduction", "evaluation", "exploration"] = "run"
+    status: Literal["planned", "queued", "running", "completed", "failed", "cancelled"] = "planned"
+    parent_experiment_id: int | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
+    environment: dict[str, Any] = Field(default_factory=dict)
+    dataset_version: str = Field(default="", max_length=4000)
+    code_reference: str = Field(default="", max_length=4000)
+    command: str = Field(default="", max_length=20_000)
+    observations: str = Field(default="", max_length=100_000)
+    conclusion: str = Field(default="", max_length=100_000)
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    metrics: list[ExperimentMetricInput] = Field(default_factory=list, max_length=10_000)
+    artifacts: list[ExperimentArtifactInput] = Field(default_factory=list, max_length=500)
+
+
+class ExperimentUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    objective: str | None = Field(default=None, max_length=50_000)
+    hypothesis: str | None = Field(default=None, max_length=50_000)
+    experiment_type: Literal["run", "baseline", "ablation", "reproduction", "evaluation", "exploration"] | None = None
+    status: Literal["planned", "queued", "running", "completed", "failed", "cancelled"] | None = None
+    parent_experiment_id: int | None = None
+    config: dict[str, Any] | None = None
+    environment: dict[str, Any] | None = None
+    dataset_version: str | None = Field(default=None, max_length=4000)
+    code_reference: str | None = Field(default=None, max_length=4000)
+    command: str | None = Field(default=None, max_length=20_000)
+    observations: str | None = Field(default=None, max_length=100_000)
+    conclusion: str | None = Field(default=None, max_length=100_000)
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+
+
+class ExperimentMetricsAppend(BaseModel):
+    metrics: list[ExperimentMetricInput] = Field(min_length=1, max_length=10_000)
+
+
+class ExperimentArtifactsAppend(BaseModel):
+    artifacts: list[ExperimentArtifactInput] = Field(min_length=1, max_length=500)
+
+
+class ExperimentAnalysisRequest(BaseModel):
+    question: str = Field(default="请总结实验进展、主要结果、异常与下一步建议。", min_length=1, max_length=20_000)
+
+
 class PaperEvidenceItem(BaseModel):
     field_name: Literal["research_problem", "method", "innovation", "experiment_conclusion", "limitation"]
     claim: str = Field(min_length=1, max_length=20_000)

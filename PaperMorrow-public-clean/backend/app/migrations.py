@@ -176,12 +176,108 @@ def _migration_005_grounded_knowledge_graph(connection) -> None:
     connection.execute(text("CREATE INDEX IF NOT EXISTS ix_paper_resources_paper ON paper_resources(paper_id)"))
 
 
+def _migration_006_unified_notes(connection) -> None:
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS notes (
+        id INTEGER PRIMARY KEY, title VARCHAR(500) NOT NULL DEFAULT '未命名笔记', content TEXT NOT NULL DEFAULT '',
+        document_format VARCHAR(16) NOT NULL DEFAULT 'markdown', editor_mode VARCHAR(16) NOT NULL DEFAULT 'standard',
+        origin VARCHAR(16) NOT NULL DEFAULT 'standalone', project_id INTEGER REFERENCES research_projects(id) ON DELETE SET NULL,
+        legacy_paper_id INTEGER UNIQUE REFERENCES papers(id) ON DELETE SET NULL,
+        created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL
+    )"""))
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS note_paper_links (
+        id INTEGER PRIMARY KEY, note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+        paper_id INTEGER NOT NULL REFERENCES papers(id) ON DELETE CASCADE, citation_key VARCHAR(120) NOT NULL DEFAULT '',
+        locator VARCHAR(120) NOT NULL DEFAULT '', created_at DATETIME NOT NULL, UNIQUE(note_id, paper_id)
+    )"""))
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS note_artifacts (
+        id INTEGER PRIMARY KEY, note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+        artifact_type VARCHAR(32) NOT NULL, status VARCHAR(24) NOT NULL DEFAULT 'completed', content TEXT NOT NULL DEFAULT '',
+        output_path TEXT, error TEXT, created_at DATETIME NOT NULL
+    )"""))
+    if inspect(connection).has_table("paper_notes") and inspect(connection).has_table("papers"):
+        connection.execute(text("""INSERT OR IGNORE INTO notes
+            (title, content, document_format, editor_mode, origin, legacy_paper_id, created_at, updated_at)
+            SELECT COALESCE(NULLIF(p.title_zh, ''), p.title_en), pn.content, 'markdown', 'professional', 'reader',
+                   pn.paper_id, pn.updated_at, pn.updated_at
+            FROM paper_notes pn JOIN papers p ON p.id = pn.paper_id
+        """))
+        connection.execute(text("""INSERT OR IGNORE INTO note_paper_links (note_id, paper_id, citation_key, locator, created_at)
+            SELECT n.id, n.legacy_paper_id, '', '', n.created_at FROM notes n WHERE n.legacy_paper_id IS NOT NULL
+        """))
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS ix_notes_updated ON notes(updated_at)",
+        "CREATE INDEX IF NOT EXISTS ix_notes_project ON notes(project_id)",
+        "CREATE INDEX IF NOT EXISTS ix_note_paper_links_note ON note_paper_links(note_id)",
+        "CREATE INDEX IF NOT EXISTS ix_note_paper_links_paper ON note_paper_links(paper_id)",
+        "CREATE INDEX IF NOT EXISTS ix_note_artifacts_note ON note_artifacts(note_id)",
+    ):
+        connection.execute(text(statement))
+
+
+def _migration_007_experiment_records(connection) -> None:
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS project_experiments (
+        id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+        parent_experiment_id INTEGER REFERENCES project_experiments(id) ON DELETE SET NULL,
+        title VARCHAR(500) NOT NULL, objective TEXT NOT NULL DEFAULT '', hypothesis TEXT NOT NULL DEFAULT '',
+        experiment_type VARCHAR(32) NOT NULL DEFAULT 'run', status VARCHAR(32) NOT NULL DEFAULT 'planned',
+        config_json TEXT NOT NULL DEFAULT '{}', environment_json TEXT NOT NULL DEFAULT '{}',
+        dataset_version TEXT NOT NULL DEFAULT '', code_reference TEXT NOT NULL DEFAULT '', command TEXT NOT NULL DEFAULT '',
+        observations TEXT NOT NULL DEFAULT '', conclusion TEXT NOT NULL DEFAULT '', started_at DATETIME, ended_at DATETIME,
+        created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL
+    )"""))
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS experiment_metrics (
+        id INTEGER PRIMARY KEY, experiment_id INTEGER NOT NULL REFERENCES project_experiments(id) ON DELETE CASCADE,
+        name VARCHAR(160) NOT NULL, value FLOAT NOT NULL, step INTEGER, split VARCHAR(80) NOT NULL DEFAULT '',
+        unit VARCHAR(40) NOT NULL DEFAULT '', is_primary BOOLEAN NOT NULL DEFAULT 0,
+        metadata_json TEXT NOT NULL DEFAULT '{}', recorded_at DATETIME NOT NULL
+    )"""))
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS experiment_artifacts (
+        id INTEGER PRIMARY KEY, experiment_id INTEGER NOT NULL REFERENCES project_experiments(id) ON DELETE CASCADE,
+        artifact_type VARCHAR(40) NOT NULL DEFAULT 'file', name VARCHAR(300) NOT NULL, uri TEXT NOT NULL,
+        metadata_json TEXT NOT NULL DEFAULT '{}', created_at DATETIME NOT NULL
+    )"""))
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS experiment_analyses (
+        id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+        question TEXT NOT NULL, answer TEXT NOT NULL, sources_json TEXT NOT NULL DEFAULT '[]',
+        used_llm BOOLEAN NOT NULL DEFAULT 0, created_at DATETIME NOT NULL
+    )"""))
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS ix_project_experiments_project ON project_experiments(project_id)",
+        "CREATE INDEX IF NOT EXISTS ix_project_experiments_parent ON project_experiments(parent_experiment_id)",
+        "CREATE INDEX IF NOT EXISTS ix_project_experiments_status ON project_experiments(status)",
+        "CREATE INDEX IF NOT EXISTS ix_experiment_metrics_experiment ON experiment_metrics(experiment_id)",
+        "CREATE INDEX IF NOT EXISTS ix_experiment_metrics_name ON experiment_metrics(name)",
+        "CREATE INDEX IF NOT EXISTS ix_experiment_metrics_recorded_at ON experiment_metrics(recorded_at)",
+        "CREATE INDEX IF NOT EXISTS ix_experiment_artifacts_experiment ON experiment_artifacts(experiment_id)",
+        "CREATE INDEX IF NOT EXISTS ix_experiment_analyses_project ON experiment_analyses(project_id)",
+    ):
+        connection.execute(text(statement))
+
+
+def _migration_008_presentation_drafts(connection) -> None:
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS presentation_drafts (
+        id INTEGER PRIMARY KEY, title VARCHAR(500) NOT NULL, kind VARCHAR(40) NOT NULL DEFAULT 'lab-meeting',
+        language VARCHAR(16) NOT NULL DEFAULT 'zh-CN', note_id INTEGER REFERENCES notes(id) ON DELETE SET NULL,
+        project_id INTEGER REFERENCES research_projects(id) ON DELETE SET NULL,
+        paper_id INTEGER REFERENCES papers(id) ON DELETE SET NULL, instructions TEXT NOT NULL DEFAULT '',
+        outline_json TEXT NOT NULL DEFAULT '{}', source_catalog_json TEXT NOT NULL DEFAULT '[]',
+        deck_spec_json TEXT, status VARCHAR(24) NOT NULL DEFAULT 'outline', output_path TEXT, error TEXT,
+        created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL
+    )"""))
+    connection.execute(text("CREATE INDEX IF NOT EXISTS ix_presentation_drafts_note ON presentation_drafts(note_id)"))
+    connection.execute(text("CREATE INDEX IF NOT EXISTS ix_presentation_drafts_project ON presentation_drafts(project_id)"))
+    connection.execute(text("CREATE INDEX IF NOT EXISTS ix_presentation_drafts_status ON presentation_drafts(status)"))
+
+
 MIGRATIONS = [
     ("001_domain_packs", _migration_001_domain_packs),
     ("002_research_projects", _migration_002_research_projects),
     ("003_paper_evidence_versions", _migration_003_paper_evidence_versions),
     ("004_research_artifacts", _migration_004_research_artifacts),
     ("005_grounded_knowledge_graph", _migration_005_grounded_knowledge_graph),
+    ("006_unified_notes", _migration_006_unified_notes),
+    ("007_experiment_records", _migration_007_experiment_records),
+    ("008_presentation_drafts", _migration_008_presentation_drafts),
 ]
 
 

@@ -319,3 +319,29 @@ export type ChatSession = {
   created_at: string
   updated_at?: string
 }
+
+export type NoteFormat = 'markdown' | 'latex'
+export type NoteEditorMode = 'standard' | 'professional'
+
+export type UnifiedNote = {
+  id: number
+  title: string
+  content: string
+  document_format: NoteFormat
+  editor_mode: NoteEditorMode
+  origin: 'standalone' | 'reader'
+  paper_ids: number[]
+  papers?: { id: number; title: string; title_zh?: string | null }[]
+  project_id?: number | null
+  created_at: string
+  updated_at: string
+}
+
+export type NoteArtifact = {
+  type: 'flowchart' | 'mindmap' | 'presentation'
+  status: string
+  content?: string | null
+  download_url?: string | null
+  message?: string | null
+  error?: string | null
+}

@@ -499,6 +499,9 @@ class ResearchProject(Base):
     papers: Mapped[list["ResearchProjectPaper"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="ResearchProjectPaper.queue_order")
     notes: Mapped[list["ResearchProjectNote"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="ResearchProjectNote.updated_at")
     studies: Mapped[list["ResearchProjectStudy"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+    experiments: Mapped[list["ProjectExperiment"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan", order_by="ProjectExperiment.created_at"
+    )
 
 
 class ResearchProjectPaper(Base):
@@ -550,6 +553,84 @@ class ProjectChatMessage(Base):
     role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text)
     sources_json: Mapped[str] = mapped_column(Text, default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ProjectExperiment(Base):
+    __tablename__ = "project_experiments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("research_projects.id", ondelete="CASCADE"), index=True)
+    parent_experiment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("project_experiments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(500))
+    objective: Mapped[str] = mapped_column(Text, default="")
+    hypothesis: Mapped[str] = mapped_column(Text, default="")
+    experiment_type: Mapped[str] = mapped_column(String(32), default="run")
+    status: Mapped[str] = mapped_column(String(32), default="planned", index=True)
+    config_json: Mapped[str] = mapped_column(Text, default="{}")
+    environment_json: Mapped[str] = mapped_column(Text, default="{}")
+    dataset_version: Mapped[str] = mapped_column(Text, default="")
+    code_reference: Mapped[str] = mapped_column(Text, default="")
+    command: Mapped[str] = mapped_column(Text, default="")
+    observations: Mapped[str] = mapped_column(Text, default="")
+    conclusion: Mapped[str] = mapped_column(Text, default="")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    project: Mapped[ResearchProject] = relationship(back_populates="experiments")
+    parent: Mapped["ProjectExperiment | None"] = relationship(remote_side="ProjectExperiment.id")
+    metrics: Mapped[list["ExperimentMetric"]] = relationship(
+        back_populates="experiment", cascade="all, delete-orphan", order_by="ExperimentMetric.recorded_at"
+    )
+    artifacts: Mapped[list["ExperimentArtifact"]] = relationship(
+        back_populates="experiment", cascade="all, delete-orphan", order_by="ExperimentArtifact.created_at"
+    )
+
+
+class ExperimentMetric(Base):
+    __tablename__ = "experiment_metrics"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    experiment_id: Mapped[int] = mapped_column(ForeignKey("project_experiments.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(160), index=True)
+    value: Mapped[float] = mapped_column(Float)
+    step: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    split: Mapped[str] = mapped_column(String(80), default="")
+    unit: Mapped[str] = mapped_column(String(40), default="")
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+    experiment: Mapped[ProjectExperiment] = relationship(back_populates="metrics")
+
+
+class ExperimentArtifact(Base):
+    __tablename__ = "experiment_artifacts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    experiment_id: Mapped[int] = mapped_column(ForeignKey("project_experiments.id", ondelete="CASCADE"), index=True)
+    artifact_type: Mapped[str] = mapped_column(String(40), default="file")
+    name: Mapped[str] = mapped_column(String(300))
+    uri: Mapped[str] = mapped_column(Text)
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    experiment: Mapped[ProjectExperiment] = relationship(back_populates="artifacts")
+
+
+class ExperimentAnalysis(Base):
+    __tablename__ = "experiment_analyses"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("research_projects.id", ondelete="CASCADE"), index=True)
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text)
+    sources_json: Mapped[str] = mapped_column(Text, default="[]")
+    used_llm: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
