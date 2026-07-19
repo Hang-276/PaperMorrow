@@ -29,7 +29,7 @@ from backend.app.database import SessionLocal, init_db
 from backend.app.models import ChatSession, DomainPack, LibraryEntry, LibraryFolder, LibraryTag, LocalPaperFile, Paper, PaperNote, RecommendationAssessment, RecommendationBatch, ResearchProfile, ResearchStudy, Tag, TokenUsage
 from backend.app.library_folder_service import LibraryFolderService
 from backend.app.research_service import ResearchService, research_study_dict
-from backend.app.recommendation import RecommendationService
+from backend.app.recommendation import RecommendationService, normalize_bilingual_analysis
 from backend.app.paper_sources import PaperCandidate
 from backend.app.recommendation import identity_hash, normalize_title
 from backend.app.recommendation_pipeline import (
@@ -74,6 +74,24 @@ def test_title_normalization_and_identity_are_stable():
     digest = identity_hash(candidate)
     candidate.title = "A completely changed title"
     assert identity_hash(candidate) == digest
+
+
+def test_bilingual_analysis_upgrade_preserves_legacy_english_and_named_terms():
+    previous = json.dumps({"method": "Active-Zero uses three co-evolving agents."})
+    result = normalize_bilingual_analysis({
+        "method_zh": "Active-Zero 使用三个协同进化的智能体。",
+        "method_en": "Active-Zero uses three co-evolving agents.",
+        "research_problem_zh": "如何主动探索视觉环境？",
+        "research_problem_en": "How can a model actively explore visual environments?",
+        "innovations_zh": ["主动探索闭环"],
+        "innovations_en": ["An active exploration loop"],
+    }, previous)
+    assert "Active-Zero" in result["method_zh"]
+    assert result["method"] == result["method_zh"]
+    assert result["method_en"] == "Active-Zero uses three co-evolving agents."
+
+    legacy_only = normalize_bilingual_analysis({"research_problem": "Existing methods rely on static images."})
+    assert legacy_only["research_problem_en"] == "Existing methods rely on static images."
 
 
 def test_recommendation_pipeline_interfaces_and_permanent_filter():

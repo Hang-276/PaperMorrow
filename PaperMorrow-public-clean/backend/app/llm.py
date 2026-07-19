@@ -11,7 +11,7 @@ from .settings_service import get_active_llm_profile, get_llm_profile_key
 from .usage_service import estimate_tokens, record_token_usage
 
 
-SYSTEM_PROMPT = """You are a careful AI research analyst. Return valid JSON only. Never claim facts not supported by the title and abstract. Write fluent Simplified Chinese for translated and analytical fields."""
+SYSTEM_PROMPT = """You are a careful bilingual AI research analyst. Return valid JSON only. Never claim facts not supported by the supplied paper content. Produce fluent Simplified Chinese and accurate academic English for every analytical field."""
 
 
 class LLMNotConfigured(RuntimeError):
@@ -41,7 +41,20 @@ English title: {title}
 English abstract: {abstract}
 
 Return a JSON object with these exact keys:
-title_zh, abstract_zh, one_sentence, research_problem, method, innovations (array), value (array), evidence, limitations (array), recommended_for (array), analysis_scope, evidence_items.
+title_zh, abstract_zh,
+one_sentence_zh, one_sentence_en,
+research_problem_zh, research_problem_en,
+method_zh, method_en,
+innovations_zh (array), innovations_en (array),
+value_zh (array), value_en (array),
+evidence_zh, evidence_en,
+limitations_zh (array), limitations_en (array),
+recommended_for_zh (array), recommended_for_en (array),
+analysis_scope, evidence_items.
+
+The Chinese fields must translate ordinary academic prose into natural Simplified Chinese. Preserve proper names and paper-specific identifiers in English exactly, including method/framework names (for example Active-Zero), model names, dataset and benchmark names, library names, acronyms, variable names, and numeric metrics. Generic concepts and generic component roles must be Chinese; when useful, introduce a named component as Chinese followed by its official English name in parentheses. Do not leave an entire Chinese field in English merely because it contains technical terms.
+
+The *_en fields must be complete English counterparts, not translations of labels only. Chinese and English arrays must correspond item-by-item where practical.
 analysis_scope must be "abstract". evidence_items must contain only claims supported by the supplied abstract, with field_name (research_problem/method/innovation/experiment_conclusion/limitation), claim, page_number (always null), section ("Abstract"), evidence_excerpt (a short exact excerpt from the abstract), source_scope ("abstract"), and conclusion_type (paper_fact/author_claim/ai_judgment). Never invent page numbers or full-text evidence. The English title must not be modified or omitted by the application."""
         if self.provider == "claude":
             return await self._claude(prompt, "analysis")

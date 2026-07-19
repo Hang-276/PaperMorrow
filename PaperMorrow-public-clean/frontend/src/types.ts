@@ -54,13 +54,29 @@ export type LibrarySearchResult = {
 
 export type Summary = {
   one_sentence?: string
+  one_sentence_zh?: string
+  one_sentence_en?: string
   research_problem?: string
+  research_problem_zh?: string
+  research_problem_en?: string
   method?: string
+  method_zh?: string
+  method_en?: string
   innovations?: string[]
+  innovations_zh?: string[]
+  innovations_en?: string[]
   value?: string[]
+  value_zh?: string[]
+  value_en?: string[]
   evidence?: string
+  evidence_zh?: string
+  evidence_en?: string
   limitations?: string[]
+  limitations_zh?: string[]
+  limitations_en?: string[]
   recommended_for?: string[]
+  recommended_for_zh?: string[]
+  recommended_for_en?: string[]
 }
 
 export type Paper = {
