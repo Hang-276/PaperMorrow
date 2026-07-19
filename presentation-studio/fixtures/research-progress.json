@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "1.0",
+  "metadata": {
+    "title": "多模态智能体研究进度",
+    "subtitle": "本周实验、关键变化与下一步计划",
+    "author": "PaperMorrow Research Group",
+    "language": "zh-CN",
+    "kind": "research-progress"
+  },
+  "theme": { "accentColor": "2563EB", "fontFamily": "Arial", "monoFontFamily": "Menlo" },
+  "sources": [
+    { "id": "EXP-021", "type": "experiment", "title": "Baseline：固定检索 Top-k", "locator": "2026-07-12", "confidence": 1 },
+    { "id": "EXP-024", "type": "experiment", "title": "动态检索预算与失败回放", "locator": "2026-07-16", "confidence": 1 },
+    { "id": "NOTE-018", "type": "note", "title": "错误案例复盘", "locator": "项目笔记", "confidence": 1 },
+    { "id": "INFER-004", "type": "inference", "title": "实验 Agent 对性能变化的解释", "confidence": 0.58 }
+  ],
+  "slides": [
+    { "id": "slide-title", "layout": "title", "title": "多模态智能体研究进度", "subtitle": "从固定检索到动态预算：一周内发生了什么", "blocks": [], "citations": [] },
+    {
+      "id": "slide-summary", "layout": "data", "title": "本周结论：总体成功率提高，但长任务稳定性仍不足", "keyMessage": "主要收益出现在检索不足的任务；超长轨迹仍频繁触发预算上限。",
+      "blocks": [
+        { "type": "metrics", "items": [
+          { "label": "任务成功率", "value": "68.4%", "delta": "+6.8 pts", "sentiment": "positive" },
+          { "label": "平均工具调用", "value": "7.3", "delta": "+0.9 calls", "sentiment": "negative" },
+          { "label": "失败后恢复率", "value": "41.2%", "delta": "+12.6 pts", "sentiment": "positive" }
+        ] },
+        { "type": "chart", "chartType": "line", "labels": ["E21", "E22", "E23", "E24"], "series": [
+          { "name": "成功率", "values": [61.6, 63.1, 64.9, 68.4] },
+          { "name": "恢复率", "values": [28.6, 31.3, 35.7, 41.2] }
+        ], "showLegend": true }
+      ],
+      "citations": ["EXP-021", "EXP-024"]
+    },
+    {
+      "id": "slide-timeline", "layout": "timeline", "title": "实验时间线：每次变更都保留可追踪的父实验",
+      "blocks": [{ "type": "timeline", "events": [
+        { "date": "07-12", "title": "E21 基线", "detail": "固定 Top-k 检索；建立可复现基准", "status": "completed" },
+        { "date": "07-14", "title": "E22 预算", "detail": "根据任务长度动态分配检索次数", "status": "completed" },
+        { "date": "07-15", "title": "E23 回放", "detail": "加入失败轨迹回放", "status": "completed" },
+        { "date": "07-16", "title": "E24 组合", "detail": "组合动态预算与失败回放", "status": "current" },
+        { "date": "Next", "title": "分层消融", "detail": "隔离预算与回放各自贡献", "status": "planned" }
+      ] }],
+      "citations": ["EXP-021", "EXP-024"]
+    },
+    {
+      "id": "slide-analysis", "layout": "two-column", "title": "结果解释：事实、人工观察和 AI 推断必须分开",
+      "blocks": [
+        { "type": "bullets", "title": "已记录事实", "items": ["E24 成功率比 E21 高 6.8 个百分点", "E24 平均工具调用增加 0.9 次", "长轨迹仍是主要失败类型"] },
+        { "type": "bullets", "title": "待验证的 AI 推断", "items": ["失败回放可能提高第二次检索质量", "预算增长可能掩盖单次调用效率问题", "需要按任务长度进行分层统计"] }
+      ],
+      "citations": ["EXP-021", "EXP-024", "NOTE-018", "INFER-004"]
+    },
+    {
+      "id": "slide-next", "layout": "comparison", "title": "下周计划按证据缺口排序",
+      "blocks": [{ "type": "comparison", "columns": [
+        { "heading": "必须完成", "accent": true, "items": ["运行预算/回放 2×2 消融", "按任务长度报告置信区间", "固定随机种子重复三次"] },
+        { "heading": "条件允许", "items": ["检查检索结果相关性", "记录每步 token 与延迟", "建立失败类型标注集"] },
+        { "heading": "暂不扩展", "items": ["更换基础模型", "增加新的工具集合", "引入向量数据库"] }
+      ] }],
+      "citations": ["NOTE-018", "INFER-004"]
+    },
+    { "id": "slide-bibliography", "layout": "bibliography", "title": "实验记录与分析来源", "blocks": [], "citations": ["EXP-021", "EXP-024", "NOTE-018", "INFER-004"] }
+  ]
+}

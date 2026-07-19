@@ -1,0 +1,160 @@
+{
+  "schemaVersion": "1.0",
+  "metadata": {
+    "title": "Active-Zero：从被动自博弈到主动视觉探索",
+    "subtitle": "论文组会汇报 · 问题、方法、证据与开放问题",
+    "author": "PaperMorrow Research Group",
+    "institution": "Vision & Agent Lab",
+    "language": "zh-CN",
+    "kind": "paper-report",
+    "generatedAt": "2026-07-19T10:00:00.000Z"
+  },
+  "theme": { "accentColor": "1677FF", "fontFamily": "Arial", "monoFontFamily": "Menlo" },
+  "sources": [
+    {
+      "id": "PAPER-001",
+      "type": "paper",
+      "title": "Active-Zero: Self-Evolving Vision-Language Models with Active Environment Exploration",
+      "authors": ["Research Team"],
+      "year": 2025,
+      "locator": "abstract and reported experiment tables",
+      "url": "https://arxiv.org/",
+      "evidence": "The fixture uses the paper summary and reported aggregate results only.",
+      "confidence": 0.9
+    },
+    {
+      "id": "NOTE-001",
+      "type": "note",
+      "title": "组会阅读笔记：Active-Zero",
+      "locator": "研究问题与局限",
+      "confidence": 1
+    },
+    {
+      "id": "INFER-001",
+      "type": "inference",
+      "title": "PaperMorrow AI 对可复现性风险的判断",
+      "evidence": "Inference, not a claim made by the authors.",
+      "confidence": 0.62
+    }
+  ],
+  "slides": [
+    {
+      "id": "slide-title",
+      "layout": "title",
+      "title": "Active-Zero：让视觉语言模型主动寻找学习经验",
+      "subtitle": "一篇论文的核心问题、方法机制、实验信号与复现风险",
+      "blocks": [],
+      "citations": ["PAPER-001"]
+    },
+    {
+      "id": "slide-thesis",
+      "layout": "statement",
+      "title": "核心判断",
+      "keyMessage": "论文的价值不只在性能数字，而在于把数据选择本身纳入自我进化闭环。",
+      "blocks": [
+        {
+          "type": "quote",
+          "text": "模型不再被动消费固定图像集合，而是依据自身能力边界主动检索环境、生成问题并用结果更新策略。",
+          "attribution": "基于论文方法描述的中文概括"
+        }
+      ],
+      "citations": ["PAPER-001"],
+      "speakerNotes": "强调这是对方法机制的概括，具体模块定义以原论文为准。"
+    },
+    {
+      "id": "slide-problem",
+      "layout": "two-column",
+      "title": "研究问题：固定数据使自博弈困在已有分布中",
+      "keyMessage": "作者试图解决的是经验获取效率，而不只是训练目标。",
+      "blocks": [
+        {
+          "type": "bullets",
+          "title": "现有路径",
+          "items": ["依赖静态图像集合中的被动交互", "过度依赖初始数据覆盖范围", "在过易或过难样本上浪费计算"]
+        },
+        {
+          "type": "bullets",
+          "title": "论文提出的转变",
+          "items": ["按模型能力边界检索开放世界图像", "合成校准难度的推理任务", "通过准确率奖励闭环更新"]
+        }
+      ],
+      "citations": ["PAPER-001", "NOTE-001"]
+    },
+    {
+      "id": "slide-loop",
+      "layout": "timeline",
+      "title": "方法不是线性流水线，而是反复自举的闭环",
+      "blocks": [
+        {
+          "type": "timeline",
+          "events": [
+            { "date": "Step 1", "title": "Searcher", "detail": "依据能力前沿检索开放世界视觉数据", "status": "completed" },
+            { "date": "Step 2", "title": "Questioner", "detail": "为当前能力合成难度适中的推理任务", "status": "completed" },
+            { "date": "Step 3", "title": "Solver", "detail": "完成任务并产生可用于优化的反馈", "status": "current" },
+            { "date": "Step 4", "title": "Update", "detail": "奖励信号更新策略并进入下一轮探索", "status": "planned" }
+          ]
+        }
+      ],
+      "citations": ["PAPER-001"]
+    },
+    {
+      "id": "slide-results",
+      "layout": "data",
+      "title": "实验信号：推理任务和通用理解均报告提升",
+      "keyMessage": "这里展示论文报告的汇总结果，不把相关性写成已经证实的因果关系。",
+      "blocks": [
+        {
+          "type": "metrics",
+          "items": [
+            { "label": "推理任务平均准确率", "value": "53.97%", "delta": "+5.7 pts", "sentiment": "positive" },
+            { "label": "通用理解平均准确率", "value": "59.77%", "delta": "+3.9 pts", "sentiment": "positive" },
+            { "label": "评测基准", "value": "12", "delta": "跨任务汇总", "sentiment": "neutral" }
+          ]
+        },
+        {
+          "type": "chart",
+          "chartType": "column",
+          "labels": ["推理任务", "通用理解"],
+          "series": [
+            { "name": "基线（由提升量反推，仅用于展示）", "values": [48.27, 55.87] },
+            { "name": "Active-Zero", "values": [53.97, 59.77] }
+          ],
+          "showLegend": true
+        }
+      ],
+      "citations": ["PAPER-001"]
+    },
+    {
+      "id": "slide-objective",
+      "layout": "content",
+      "title": "优化目标可抽象为能力边界上的期望收益",
+      "blocks": [
+        { "type": "formula", "latex": "\\theta_{t+1}=\\theta_t+\\eta\\,\\nabla_{\\theta}\\,\\mathbb{E}_{x\\sim q_t(x\\mid\\theta_t)}[R(x,\\theta_t)]", "caption": "概念化表达，用于解释闭环，不代表论文的逐字公式。" }
+      ],
+      "citations": ["PAPER-001", "INFER-001"]
+    },
+    {
+      "id": "slide-risks",
+      "layout": "comparison",
+      "title": "下一步阅读重点：区分论文证据与尚待验证的判断",
+      "blocks": [
+        {
+          "type": "comparison",
+          "columns": [
+            { "heading": "论文已报告", "accent": true, "items": ["三类智能体组成闭环", "跨 12 个基准报告汇总提升", "主动探索用于构建训练经验"] },
+            { "heading": "需要全文核验", "items": ["消融是否隔离了检索质量贡献", "计算开销是否与基线公平", "不同开放世界数据源的偏差"] },
+            { "heading": "我们的 AI 判断", "items": ["复现瓶颈可能来自环境与数据接口", "奖励校准可能决定训练稳定性", "需要保存失败探索样本"] }
+          ]
+        }
+      ],
+      "citations": ["PAPER-001", "NOTE-001", "INFER-001"]
+    },
+    {
+      "id": "slide-bibliography",
+      "layout": "bibliography",
+      "title": "证据与引用",
+      "blocks": [],
+      "citations": ["PAPER-001", "NOTE-001", "INFER-001"]
+    }
+  ]
+}

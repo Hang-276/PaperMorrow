@@ -10,14 +10,14 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session, selectinload
 
 from .models import (
-    DeepWikiJob, Paper, ProjectChatMessage, ResearchProject, ResearchProjectNote,
+    DeepWikiJob, Paper, ProjectChatMessage, ProjectExperiment, ResearchProject, ResearchProjectNote,
     ResearchProjectPaper, ResearchProjectStudy, ResearchStudy,
 )
 
 
 PAPER_ROLES = {"core", "support", "conflict", "background", "to_verify"}
 READING_STATUSES = {"to_screen", "to_read", "reading", "read_to_organize", "completed", "shelved"}
-SOURCE_LABELS = {"paper": "论文", "note": "笔记", "study": "专题调研", "wiki": "Wiki", "analysis": "证据化分析"}
+SOURCE_LABELS = {"paper": "论文", "note": "笔记", "study": "专题调研", "wiki": "Wiki", "analysis": "证据化分析", "experiment": "实验记录"}
 
 
 def project_dict(project: ResearchProject, detail: bool = True) -> dict[str, Any]:
@@ -44,7 +44,7 @@ def project_dict(project: ResearchProject, detail: bool = True) -> dict[str, Any
 def load_project(db: Session, project_id: int) -> ResearchProject | None:
     return db.scalar(select(ResearchProject).where(ResearchProject.id == project_id).options(
         selectinload(ResearchProject.papers).selectinload(ResearchProjectPaper.paper),
-        selectinload(ResearchProject.notes), selectinload(ResearchProject.studies),
+        selectinload(ResearchProject.notes), selectinload(ResearchProject.studies), selectinload(ResearchProject.experiments).selectinload(ProjectExperiment.metrics),
     ))
 
 
@@ -70,6 +70,22 @@ def reindex_project(db: Session, project_id: int) -> int:
         study = db.get(ResearchStudy, link.study_id)
         if study and study.review_markdown:
             rows.append({"project_id": project_id, "source_type": "study", "source_id": str(study.id), "title": study.title, "content": study.review_markdown})
+    for experiment in project.experiments:
+        metric_text = "\n".join(
+            f"{metric.name}={metric.value}{metric.unit} step={metric.step if metric.step is not None else '-'} split={metric.split or '-'}"
+            for metric in experiment.metrics
+        )
+        content = "\n".join(filter(None, [
+            f"状态：{experiment.status}；类型：{experiment.experiment_type}",
+            f"目标：{experiment.objective}" if experiment.objective else "",
+            f"假设：{experiment.hypothesis}" if experiment.hypothesis else "",
+            f"数据版本：{experiment.dataset_version}" if experiment.dataset_version else "",
+            f"代码版本：{experiment.code_reference}" if experiment.code_reference else "",
+            f"观察：{experiment.observations}" if experiment.observations else "",
+            f"结论：{experiment.conclusion}" if experiment.conclusion else "",
+            metric_text,
+        ]))
+        rows.append({"project_id": project_id, "source_type": "experiment", "source_id": str(experiment.id), "title": experiment.title, "content": content})
     if project.deepwiki_job_id:
         job = db.get(DeepWikiJob, project.deepwiki_job_id)
         if job and job.output_dir:
