@@ -438,6 +438,19 @@ class PaperChatRequest(BaseModel):
     session_id: str | None = None
 
 
+class WorkspaceChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=20_000)
+
+
+class WorkspaceChatRequest(BaseModel):
+    page_id: str = Field(min_length=1, max_length=80, pattern=r"^[a-z0-9_-]+$")
+    page_title: str = Field(min_length=1, max_length=200)
+    context: str = Field(default="", max_length=60_000)
+    message: str = Field(min_length=1, max_length=20_000)
+    history: list[WorkspaceChatMessage] = Field(default_factory=list, max_length=20)
+
+
 class PaperChatResponse(BaseModel):
     session_id: str
     answer: str
