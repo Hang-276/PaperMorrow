@@ -126,6 +126,8 @@ DEFAULT_SETTINGS = {
     "daily_enabled": False,
     "daily_time": "09:00",
     "timezone": "Asia/Shanghai",
+    "timezone_auto": True,
+    "daylight_saving_enabled": True,
     "daily_count": 5,
     "daily_tag_ids": [],
     "daily_profile_ids": [],
@@ -145,9 +147,9 @@ DEFAULT_SETTINGS = {
 }
 
 TIMEZONE_OPTIONS = [
-    {"value": "Asia/Shanghai", "label": "北京时间"},
-    {"value": "America/New_York", "label": "美东时间"},
-    {"value": "America/Los_Angeles", "label": "美西时间"},
+    {"value": "Asia/Shanghai", "label": "北京时间", "label_en": "Beijing Time"},
+    {"value": "America/New_York", "label": "华盛顿时间", "label_en": "Washington, D.C. Time"},
+    {"value": "America/Los_Angeles", "label": "美国西海岸时间", "label_en": "U.S. West Coast Time"},
 ]
 
 

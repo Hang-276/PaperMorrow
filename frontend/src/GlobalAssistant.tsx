@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUp, Bot, Check, FilePlus2, MessageCircle, NotebookPen, Settings, Sparkles, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { ArrowUp, Bot, Check, FilePlus2, GripHorizontal, Maximize2, MessageCircle, Minimize2, NotebookPen, Settings, Sparkles, X } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { api } from './api'
@@ -20,6 +20,7 @@ const suggestions: Record<string, string[]> = {
   domains: ['检查当前专业配置是否完整', '这些评分规则可能有哪些偏差？', '给出更稳健的数据源配置建议'],
   settings: ['解释当前设置会如何影响推荐', '检查还缺少哪些必要配置', '怎样配置更适合本地优先使用？'],
   planner: ['帮我按紧急程度整理待办', '根据当前 DDL 制定投稿准备计划', '哪些任务应该提前完成以降低截稿风险？'],
+  cowork: ['帮我把研究目标拆成可执行步骤', '哪些资料适合授权给科研 Agent？', '如何为当前任务设置最小必要权限？'],
 }
 
 function visibleContext(fallbackTitle: string) {
@@ -54,6 +55,10 @@ export default function GlobalAssistant({ open, onOpen, onClose, pageId, pageTit
   const [notes, setNotes] = useState<UnifiedNote[]>([])
   const [newTitle, setNewTitle] = useState('')
   const [notice, setNotice] = useState('')
+  const [responseDetail,setResponseDetail]=useState<'concise'|'rich'>('rich')
+  const [fullscreen,setFullscreen]=useState(false)
+  const [position,setPosition]=useState<{x:number;y:number}|null>(null)
+  const dragRef=useRef<{dx:number;dy:number}|null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const quickQuestions = useMemo(() => suggestions[pageId] || ['总结当前页面', '指出最重要的信息', '建议下一步行动'], [pageId])
 
@@ -72,7 +77,7 @@ export default function GlobalAssistant({ open, onOpen, onClose, pageId, pageTit
       const result = await api<{ answer: string }>('/api/assistant/chat', {
         method: 'POST', body: JSON.stringify({
           page_id: pageId, page_title: context.title, context: context.text, message,
-          history: prior.map(item => ({ role: item.role, content: item.content })),
+          history: prior.map(item => ({ role: item.role, content: item.content })), response_detail:responseDetail,
         }),
       })
       setMessages(items => [...items, { id: crypto.randomUUID(), role: 'assistant', content: result.answer, pageTitle: context.title }])
@@ -108,10 +113,15 @@ export default function GlobalAssistant({ open, onOpen, onClose, pageId, pageTit
   }
 
   if (!open) return showLauncher ? <button className="global-assistant-launcher" onClick={onOpen} aria-label="打开全局助手"><Sparkles/><span>问 AI</span></button> : null
-  return <aside className="global-assistant" aria-label="全局研究助手">
-    <header className="global-assistant-head">
+  const startDrag=(event:ReactPointerEvent<HTMLElement>)=>{if(fullscreen||(event.target as HTMLElement).closest('button'))return;const rect=event.currentTarget.parentElement!.getBoundingClientRect();dragRef.current={dx:event.clientX-rect.left,dy:event.clientY-rect.top};event.currentTarget.setPointerCapture(event.pointerId)}
+  const moveDrag=(event:ReactPointerEvent<HTMLElement>)=>{if(!dragRef.current)return;const width=event.currentTarget.parentElement!.getBoundingClientRect().width;const height=event.currentTarget.parentElement!.getBoundingClientRect().height;setPosition({x:Math.max(8,Math.min(window.innerWidth-width-8,event.clientX-dragRef.current.dx)),y:Math.max(8,Math.min(window.innerHeight-height-8,event.clientY-dragRef.current.dy))})}
+  const stopDrag=(event:ReactPointerEvent<HTMLElement>)=>{dragRef.current=null;event.currentTarget.releasePointerCapture?.(event.pointerId)}
+  return <aside className={`global-assistant ${fullscreen?'fullscreen':''}`} style={!fullscreen&&position?{left:position.x,top:position.y,right:'auto',bottom:'auto'}:undefined} aria-label="全局研究助手">
+    <header className="global-assistant-head" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={stopDrag}>
       <div className="global-assistant-mark"><Sparkles/></div>
       <div><strong>研究助手</strong><span>正在阅读 · {contextTitle}</span></div>
+      <GripHorizontal className="assistant-drag-handle"/>
+      <button onClick={()=>setFullscreen(value=>!value)} aria-label={fullscreen?'退出全屏':'全屏显示'}>{fullscreen?<Minimize2/>:<Maximize2/>}</button>
       <button onClick={onClose} aria-label="关闭助手"><X/></button>
     </header>
     {!configured ? <div className="global-assistant-empty"><Bot/><h3>连接模型后即可开始</h3><p>助手会读取你当前可见的页面内容，回答问题，并把有价值的回复归档到笔记。</p><button onClick={onOpenSettings}><Settings/>前往模型设置</button></div> : <>
@@ -126,7 +136,7 @@ export default function GlobalAssistant({ open, onOpen, onClose, pageId, pageTit
         <div ref={endRef}/>
       </div>
       {notice && <div className="global-assistant-notice"><Check/>{notice}</div>}
-      <div className="global-assistant-compose"><textarea value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send() } }} placeholder={`询问“${contextTitle}”中的内容…`}/><button disabled={!input.trim() || busy} onClick={() => send()}><ArrowUp/></button><small>Enter 发送 · Shift + Enter 换行</small></div>
+      <div className="global-assistant-compose"><textarea value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send() } }} placeholder={`询问“${contextTitle}”中的内容…`}/><button disabled={!input.trim() || busy} onClick={() => send()}><ArrowUp/></button><div className="assistant-compose-options"><select aria-label="回答详细程度" value={responseDetail} onChange={event=>setResponseDetail(event.target.value as 'concise'|'rich')}><option value="concise">简洁回答</option><option value="rich">丰富回答</option></select><small>Enter 发送 · Shift + Enter 换行</small></div></div>
     </>}
     {saving && <div className="assistant-note-picker">
       <header><div><FilePlus2/><strong>保存这段回复</strong></div><button onClick={() => setSaving(null)}><X/></button></header>

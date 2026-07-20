@@ -1,0 +1,22 @@
+.app-shell.sidebar-collapsed .brand-mark{cursor:pointer}
+.app-shell.sidebar-collapsed .brand-mark:hover{box-shadow:0 0 0 4px var(--green-2),0 8px 24px rgba(0,113,227,.18)}
+.app-shell.sidebar-collapsed .notes-page:not(.sidebar-collapsed)>.notes-sidebar{width:auto;opacity:1;overflow:visible}
+.timezone-settings-row{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(300px,.8fr);gap:16px}
+.timezone-settings-row>label{display:flex;flex-direction:column;gap:7px}
+.timezone-settings-row>label small{font-size:.55rem;color:var(--muted);overflow-wrap:anywhere}
+.timezone-switches{display:flex;flex-direction:column;gap:8px}
+.timezone-switches>label{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:color-mix(in srgb,var(--ink) 2%,transparent)}
+.timezone-switches strong,.timezone-switches small{display:block}.timezone-switches strong{font-size:.66rem}.timezone-switches small{font-size:.53rem;color:var(--muted);margin-top:3px}
+.daily-schedule>label:nth-child(2){display:none}.daily-schedule{grid-template-columns:150px 130px minmax(190px,1.2fr)!important}
+@media(max-width:760px){.timezone-settings-row{grid-template-columns:1fr}.daily-schedule{grid-template-columns:1fr!important}}
+.global-assistant:not(.fullscreen) .global-assistant-head{cursor:grab;touch-action:none;user-select:none}
+.global-assistant:not(.fullscreen){height:min(760px,calc(100vh - 24px))}
+.global-assistant:not(.fullscreen) .global-assistant-head:active{cursor:grabbing}
+.assistant-drag-handle{width:15px!important;color:var(--muted);opacity:.65;flex:0 0 auto}
+.global-assistant.fullscreen{inset:0!important;width:100vw!important;height:100vh!important;max-width:none!important;border:0;border-radius:0}
+.global-assistant.fullscreen .global-assistant-thread{max-width:900px;width:100%;margin:0 auto}
+.global-assistant.fullscreen .global-assistant-compose{padding-inline:max(11px,calc((100vw - 900px)/2))}
+.assistant-compose-options{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.assistant-compose-options select{border:0;border-radius:8px;background:color-mix(in srgb,var(--ink) 6%,transparent);color:var(--ink);padding:5px 7px;font-size:.52rem}
+.assistant-compose-options small{padding:0!important}
+@media(max-width:600px){.global-assistant:not(.fullscreen){inset:8px!important;width:calc(100vw - 16px)!important;height:calc(100vh - 16px)!important}.assistant-drag-handle{display:none}}
