@@ -12,6 +12,7 @@ from .api import router
 from .note_api import router as note_router
 from .presentation_api import router as presentation_router
 from .planner_api import router as planner_router
+from .cowork_api import router as cowork_router
 from .catalog import seed_catalog
 from .config import ROOT_DIR
 from .database import SessionLocal, init_db
@@ -54,6 +55,7 @@ app.include_router(router)
 app.include_router(note_router)
 app.include_router(presentation_router)
 app.include_router(planner_router)
+app.include_router(cowork_router)
 
 dist_dir = ROOT_DIR / "frontend" / "dist"
 if dist_dir.exists():
