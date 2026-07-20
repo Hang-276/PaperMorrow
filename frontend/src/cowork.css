@@ -13,3 +13,59 @@
 @media(max-width:1050px){.cowork-shell{grid-template-columns:175px minmax(0,1fr)}.cowork-columns{grid-template-columns:minmax(400px,1fr) 280px}.cowork-compose>div>span{display:none}}
 @media(max-width:800px){.cowork-shell{grid-template-columns:1fr}.cowork-history{display:none}.cowork-columns{grid-template-columns:1fr}.cowork-inspector{display:none}.cowork-starters{grid-template-columns:1fr}.cowork-start{padding-top:35px}.cowork-intro h1{font-size:1.55rem}.cowork-workspace-head{padding:0 10px}.cowork-workspace-head h2{max-width:45vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cowork-workspace-head button{padding:6px}.cowork-permission-bar{padding-inline:10px}.cowork-plan-card{margin-inline:8px}.cowork-compose{margin-inline:8px}.cowork-messages{padding-inline:12px}}
 @media(max-width:800px){.cowork-shell{grid-template-rows:132px minmax(0,1fr)}.cowork-history{display:flex;border-right:0;border-bottom:1px solid var(--line)}.cowork-history>header{height:42px;min-height:42px}.cowork-history>div{display:flex;overflow-x:auto;padding:5px}.cowork-history>div>button{min-width:220px}.cowork-history>footer{display:none}.cowork-columns{display:block;overflow:auto}.cowork-thread{height:100%;min-height:620px}.cowork-inspector{display:block;border-left:0;border-top:1px solid var(--line);padding-bottom:24px}}
+
+/* Cowork workspace: readable desktop rhythm shared with the primary navigation. */
+.cowork-shell{height:calc(100vh - 102px);grid-template-columns:264px minmax(0,1fr)}
+.cowork-history{background:color-mix(in srgb,var(--paper) 90%,var(--cream));}
+.cowork-history>header{height:72px;padding:0 18px}
+.cowork-history>header>div{gap:11px;font-size:.8125rem}
+.cowork-history>header>div>svg{width:18px;color:var(--green)}
+.cowork-history>header>div>span,.cowork-history>header strong,.cowork-history>header small{display:block}
+.cowork-history>header strong{font-size:.8125rem}
+.cowork-history>header small{margin-top:3px;font-size:.6875rem;font-weight:400;color:var(--muted)}
+.cowork-history>header button{width:34px;height:34px;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+.cowork-history>div{padding:10px 12px}
+.cowork-history>div>button{gap:10px;min-height:54px;padding:10px;border-radius:12px}
+.cowork-history>div>button>i{width:8px;height:8px}
+.cowork-history>div>button>svg{width:14px}
+.cowork-history strong{font-size:.75rem}
+.cowork-history small{font-size:.6875rem;margin-top:4px}
+.cowork-history-empty{margin:10px 8px;color:var(--muted);font-size:.75rem;line-height:1.55}
+.cowork-history>footer{margin:12px;padding:12px 13px;border-radius:13px;gap:10px}
+.cowork-history>footer>svg{width:18px;height:18px}
+.cowork-history>footer strong{font-size:.75rem}
+.cowork-history>footer small{font-size:.6875rem;line-height:1.4}
+.cowork-start{padding:0 34px 56px;display:flex;justify-content:center}
+.cowork-start-inner{width:min(860px,100%);margin:auto;padding:54px 0 36px}
+.cowork-intro>span{font-size:.6875rem;letter-spacing:1.7px}
+.cowork-intro h1{font-size:clamp(2.2rem,3.1vw,2.8rem);line-height:1.08;letter-spacing:-.045em;margin:16px 0 18px}
+.cowork-intro p{max-width:680px;font-size:.9375rem;line-height:1.7}
+.cowork-goal-box{max-width:860px;margin-top:34px;border-radius:22px;padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.1)}
+.cowork-goal-box textarea{height:128px;padding:8px 7px;font-size:.9375rem;line-height:1.65}
+.cowork-goal-actions{gap:8px;padding-top:12px}
+.cowork-goal-actions>button:not(.cowork-send){padding:8px 10px;font-size:.75rem}
+.cowork-goal-actions label{font-size:.6875rem;gap:6px;padding-left:4px}
+.cowork-goal-actions label>span{color:var(--muted)}
+.cowork-goal-actions select{font-size:.75rem;font-weight:600;outline:0}
+.cowork-send{width:38px;height:38px;border-radius:11px!important}
+.cowork-starters{max-width:860px;margin:14px auto 0;gap:10px}
+.cowork-starters article{gap:11px;padding:14px 15px;border-radius:15px}
+.cowork-starters article>i{width:34px;height:34px;flex:0 0 auto;display:grid;place-items:center;border-radius:10px;background:var(--green-2);color:var(--green);font-style:normal}
+.cowork-starters svg{width:17px}
+.cowork-starters strong{font-size:.8125rem}
+.cowork-starters span{font-size:.6875rem;line-height:1.45;margin-top:4px}
+.cowork-skill-strip{max-width:860px;margin:18px auto 0;gap:8px}
+.cowork-skill-strip span{padding:7px 10px;font-size:.6875rem;background:transparent;border:1px solid var(--line);color:var(--muted)}
+.cowork-skill-strip svg{color:var(--green);width:13px}
+.cowork-workspace-head{height:72px;padding:0 20px}.cowork-workspace-head h2{font-size:1rem}.cowork-workspace-head>div>span{font-size:.625rem}
+.cowork-workspace-head button{font-size:.75rem;padding:8px 11px}.cowork-permission-bar{height:44px;font-size:.6875rem;padding:0 18px}.cowork-permission-bar button{font-size:.6875rem}
+.cowork-columns{grid-template-columns:minmax(500px,1fr) 330px}
+.cowork-plan-card>header>div,.cowork-plan-card article strong,.cowork-inspector>section>header,.cowork-agent-panel>header strong{font-size:.75rem}
+.cowork-plan-card article p,.cowork-inspector>section>p,.cowork-agent-panel.empty>p{font-size:.6875rem}
+.cowork-message>header,.cowork-message>div,.cowork-message-block>div{font-size:.8125rem}
+.cowork-compose textarea{font-size:.8125rem}.cowork-compose>div>span{font-size:.625rem}
+.cowork-inspector article>strong{font-size:.6875rem}.cowork-inspector article>small{font-size:.625rem}.cowork-inspector article>span{font-size:.5625rem}
+@media(max-width:1180px){.cowork-shell{grid-template-columns:224px minmax(0,1fr)}.cowork-columns{grid-template-columns:minmax(430px,1fr) 290px}}
+@media(max-width:900px){.cowork-shell{height:calc(100vh - 82px)}}
+@media(max-width:800px){.cowork-shell{grid-template-columns:1fr;grid-template-rows:104px minmax(0,1fr)}.cowork-history>header{height:48px;min-height:48px}.cowork-history-empty{margin:3px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cowork-start{padding:0 18px 40px}.cowork-start-inner{padding-top:38px}.cowork-intro h1{font-size:2.25rem}.cowork-starters{grid-template-columns:1fr}.cowork-goal-actions label>span{display:none}}
+@media(max-width:560px){.cowork-start{padding-inline:12px}.cowork-start-inner{padding-top:28px}.cowork-intro h1{font-size:1.9rem}.cowork-intro p{font-size:.8125rem}.cowork-goal-box{margin-top:24px;padding:12px}.cowork-goal-box textarea{height:108px;font-size:.8125rem}.cowork-goal-actions{flex-wrap:wrap}.cowork-goal-actions>span{display:none}.cowork-goal-actions label{margin-left:auto}.cowork-goal-actions label+label{margin-left:0}.cowork-starters article{padding:12px}.cowork-skill-strip{display:none}}

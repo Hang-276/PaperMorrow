@@ -21,3 +21,16 @@
 .assistant-compose-options select{border:0;border-radius:8px;background:color-mix(in srgb,var(--ink) 6%,transparent);color:var(--ink);padding:5px 7px;font-size:.52rem}
 .assistant-compose-options small{padding:0!important}
 @media(max-width:600px){.global-assistant:not(.fullscreen){inset:8px!important;width:calc(100vw - 16px)!important;height:calc(100vh - 16px)!important}.assistant-drag-handle{display:none}}
+
+/* Keep the logo, navigation icons and footer on one visual axis. */
+.sidebar-shell{padding:26px 18px 18px}
+.brand{padding:0 8px 26px}
+.sidebar-shell nav{gap:3px}
+.sidebar-shell nav button{min-height:42px;padding:10px 12px 10px 18px;gap:12px}
+.sidebar-shell nav button>svg:first-child{width:18px;height:18px;flex:0 0 18px}
+.sidebar-shell nav button span{font-size:.8125rem;line-height:1}
+.sidebar-foot{min-height:58px;margin-top:14px;padding:11px 12px}
+.app-shell.sidebar-collapsed .sidebar-shell{padding-inline:10px}
+.app-shell.sidebar-collapsed .brand{padding-inline:9px}
+.app-shell.sidebar-collapsed .sidebar-shell nav button{padding-inline:18px}
+@media(max-width:900px){.sidebar-shell,.app-shell.sidebar-collapsed .sidebar-shell{padding:26px 18px 18px}.app-shell.sidebar-collapsed .brand{padding:0 8px 26px}.app-shell.sidebar-collapsed .sidebar-shell nav button{padding:10px 12px 10px 18px}}
