@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from .database import SessionLocal
@@ -87,6 +88,28 @@ def token_usage_stats(db: Session, timezone_name: str, days: int = 14) -> dict[s
         "by_profile": sorted(by_profile.values(), key=lambda item: item["total_tokens"], reverse=True),
         "by_purpose": sorted(by_purpose.values(), key=lambda item: item["total_tokens"], reverse=True),
     }
+
+
+def recent_token_calls(db: Session, timezone_name: str, limit: int = 100) -> list[dict[str, Any]]:
+    """Return safe call metadata only; prompts, responses and credentials are never logged here."""
+    try:
+        tz = ZoneInfo(timezone_name)
+    except Exception:
+        tz = ZoneInfo("Asia/Shanghai")
+    rows = db.scalars(select(TokenUsage).order_by(desc(TokenUsage.created_at), desc(TokenUsage.id)).limit(limit)).all()
+    return [{
+        "id": row.id,
+        "profile_name": row.profile_name,
+        "provider": row.provider,
+        "model": row.model,
+        "purpose": row.purpose,
+        "purpose_label": PURPOSE_LABELS.get(row.purpose, row.purpose),
+        "prompt_tokens": row.prompt_tokens,
+        "completion_tokens": row.completion_tokens,
+        "total_tokens": row.total_tokens,
+        "estimated": row.estimated,
+        "created_at": (row.created_at.replace(tzinfo=timezone.utc) if row.created_at.tzinfo is None else row.created_at).astimezone(tz).isoformat(),
+    } for row in rows]
 
 
 def _empty_totals() -> dict[str, int]:

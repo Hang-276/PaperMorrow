@@ -6,7 +6,7 @@ import {
   MessageCircle, Send, Plus, Bot, User,
   BarChart3, KeyRound, Link2, Pencil, Trash2, Type,
   FlaskConical, Layers3, FolderKanban, ClipboardCheck,
-  Bell, House, ListTodo, PanelLeftClose, Globe2,
+  Bell, House, ListTodo, PanelLeftClose, Globe2, Gauge, ScrollText,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -29,6 +29,7 @@ import './layout-fixes.css'
 import type { AppSettings, Batch, ChatMessage, ChatSession, DeepWikiJob, LLMProfile, Paper, PlannerTask, ResearchProfile, SubmissionDeadline, Tag, TokenUsageStats } from './types'
 
 type View = 'home' | 'today' | 'planner' | 'research' | 'projects' | 'notes' | 'history' | 'learning' | 'deepwiki' | 'domains' | 'cowork' | 'settings'
+type LLMCallRecord={id:number;profile_name:string;provider:string;model:string;purpose:string;purpose_label:string;prompt_tokens:number;completion_tokens:number;total_tokens:number;estimated:boolean;created_at:string}
 
 const ReaderWorkspace = lazy(() => import('./ReaderWorkspace'))
 const WikiWorkspace = lazy(() => import('./WikiWorkspace'))
@@ -74,6 +75,7 @@ export default function App() {
   const [submissionDeadlines,setSubmissionDeadlines]=useState<SubmissionDeadline[]>([])
   const [noteCreateSignal,setNoteCreateSignal]=useState(0)
   const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>localStorage.getItem('papermorrow-sidebar-collapsed')==='1')
+  const [usage,setUsage]=useState<TokenUsageStats|null>(null),[llmCalls,setLlmCalls]=useState<LLMCallRecord[]>([]),[llmCallsOpen,setLlmCallsOpen]=useState(false)
 
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('papermorrow-theme', theme) }, [theme])
   useEffect(() => {
@@ -81,21 +83,22 @@ export default function App() {
   }, [settings?.font_size])
 
   const load = async () => {
-    const [tagData, loadedSettings, todayData, historyData, jobData, researchData, taskData, deadlineData] = await Promise.all([
+    const [tagData, loadedSettings, todayData, historyData, jobData, researchData, taskData, deadlineData, usageData] = await Promise.all([
       api<Tag[]>('/api/tags'), api<AppSettings>('/api/settings'), api<Batch[]>('/api/recommendations/today'),
       api<Paper[]>('/api/recommendations/history'), api<DeepWikiJob[]>('/api/deepwiki/jobs'), api<ResearchProfile[]>('/api/research-profiles'),
-      api<PlannerTask[]>('/api/planner/tasks'), api<SubmissionDeadline[]>('/api/planner/deadlines'),
+      api<PlannerTask[]>('/api/planner/tasks'), api<SubmissionDeadline[]>('/api/planner/deadlines'), api<TokenUsageStats>('/api/llm/usage'),
     ])
     const detectedTimezone=systemTimezone()
     const settingData=loadedSettings.timezone_auto!==false&&loadedSettings.timezone!==detectedTimezone
       ? await api<AppSettings>('/api/settings',{method:'PUT',body:JSON.stringify({timezone:detectedTimezone,timezone_auto:true})})
       : loadedSettings
     setTags(tagData); setSettings(settingData); setToday(todayData); setHistory(historyData); setJobs(jobData); setResearchProfiles(researchData)
-    setPlannerTasks(taskData); setSubmissionDeadlines(deadlineData)
+    setPlannerTasks(taskData); setSubmissionDeadlines(deadlineData); setUsage(usageData)
     if (!selectedTags.length) setSelectedTags(settingData.daily_tag_ids.length ? settingData.daily_tag_ids : tagData.filter(t=>t.domain==='ai').slice(0, 2).map(t => t.id))
   }
 
   const loadPlanner=async()=>{const [taskData,deadlineData]=await Promise.all([api<PlannerTask[]>('/api/planner/tasks'),api<SubmissionDeadline[]>('/api/planner/deadlines')]);setPlannerTasks(taskData);setSubmissionDeadlines(deadlineData)}
+  const openLlmCalls=async()=>{setLlmCallsOpen(true);try{setLlmCalls(await api<LLMCallRecord[]>('/api/llm/calls?limit=100'))}catch(error){setMessage(error instanceof Error?error.message:'无法读取模型调用记录')}}
 
   useEffect(() => { load().catch(error => setMessage(error.message)) }, [])
   useEffect(() => {
@@ -214,11 +217,12 @@ export default function App() {
     <aside className={`sidebar-shell ${mobileMenu ? 'open' : ''}`}>
       <div className="brand"><button className="brand-mark" aria-label={sidebarCollapsed?'展开侧栏':'PaperMorrow'} title={sidebarCollapsed?'点击 Logo 展开侧栏':'PaperMorrow'} onClick={()=>sidebarCollapsed&&toggleSidebar()}><img src="/papermorrow-logo.png" alt=""/></button><div><strong>PaperMorrow</strong><span>Read what matters next</span></div><button className="sidebar-collapse" title="收起侧栏" onClick={toggleSidebar}><PanelLeftClose/></button></div>
       <nav>{nav.map(([id, Icon, label]) => <button key={id} title={sidebarCollapsed?label:undefined} className={view === id ? 'active' : ''} onClick={() => { setView(id); setMobileMenu(false) }}><Icon size={19}/><span>{label}</span>{view === id && <ChevronRight size={16}/>}</button>)}</nav>
+      <button className="sidebar-usage" onClick={openLlmCalls} title="查看 Token 统计与模型调用记录"><Gauge size={17}/><div><strong>{(usage?.today.total_tokens||0).toLocaleString()} Token</strong><span>今日 {usage?.today.requests||0} 次调用</span></div></button>
       <button className="sidebar-foot" onClick={() => setAssistantOpen(true)}><Sparkles size={17}/><div><strong>研究助手</strong><span>{settings?.has_llm_api_key ? '随时询问当前页面' : '连接模型后开始'}</span></div><i className={settings?.has_llm_api_key ? 'online' : ''}/></button>
     </aside>
 
     <main className="main-shell">
-      <header className="topbar"><button className="icon-button menu-button" onClick={() => setMobileMenu(!mobileMenu)}><Menu/></button><div><span className="eyebrow">PAPERMORROW · RESEARCH COMPANION</span><h1>{nav.find(item => item[0] === view)?.[2]}</h1></div><div className="topbar-actions"><button className="context-ai-button" aria-label="问当前页面" onClick={() => setAssistantOpen(true)}><Sparkles/><span>问当前页面</span></button><button className="theme-toggle planner-badge-button" aria-label="查看待办与截稿提醒" onClick={()=>setView('planner')}><Bell/>{reminderCount>0&&<b>{reminderCount>99?'99+':reminderCount}</b>}</button><span className="date-pill"><CalendarClock size={16}/>{new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })}</span><button className="theme-toggle" aria-label={theme === 'light' ? '切换深色模式' : '切换浅色模式'} onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>{theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}</button></div></header>
+      <header className="topbar"><button className="icon-button menu-button" onClick={() => setMobileMenu(!mobileMenu)}><Menu/></button><div><span className="eyebrow">PAPERMORROW · RESEARCH COMPANION</span><h1>{nav.find(item => item[0] === view)?.[2]}</h1></div><div className="topbar-actions"><button className="context-ai-button" aria-label="问当前页面" onClick={() => setAssistantOpen(true)}><Sparkles/><span>问当前页面</span></button><button className="theme-toggle" aria-label="查看模型调用记录" title="模型调用记录" onClick={openLlmCalls}><ScrollText/></button><button className="theme-toggle planner-badge-button" aria-label="查看待办与截稿提醒" onClick={()=>setView('planner')}><Bell/>{reminderCount>0&&<b>{reminderCount>99?'99+':reminderCount}</b>}</button><span className="date-pill"><CalendarClock size={16}/>{new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })}</span><button className="theme-toggle" aria-label={theme === 'light' ? '切换深色模式' : '切换浅色模式'} onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>{theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}</button></div></header>
 
       {message && <div className="toast"><span>{busy && <CircleDashed className="spin" size={17}/>} {message}</span><button onClick={() => setMessage('')}><X size={16}/></button></div>}
 
@@ -250,6 +254,7 @@ export default function App() {
     {wikiJob && <Suspense fallback={<div className="reader-boot"><RefreshCw className="spin" size={20}/><span>正在打开完整 Wiki…</span></div>}><WikiWorkspace job={wikiJob} fontSize={settings?.font_size || 16} onFontSizePreview={previewFontSize} onFontSizeSave={saveFontSize} onClose={() => setWikiJob(null)} onRetry={() => retryWiki(wikiJob)}/></Suspense>} 
     {chatPaper && <ChatPanel paper={chatPaper} configured={Boolean(settings?.has_llm_api_key)} onClose={() => setChatPaper(null)} onOpenSettings={() => { setChatPaper(null); setView('settings') }}/>} 
     {readerPaper && <Suspense fallback={<div className="reader-boot"><RefreshCw className="spin" size={20}/><span>正在准备智能阅读器…</span></div>}><ReaderWorkspace paper={readerPaper} configured={Boolean(settings?.has_llm_api_key)} onClose={()=>setReaderPaper(null)} onSaved={load} onOpenNotes={()=>{setNoteFocusPaperId(readerPaper.id);setView('notes')}}/></Suspense>}
+    {llmCallsOpen&&<Modal title="模型调用记录" subtitle="仅记录模型、用途与 Token 数量；不保存提示词、回复正文或 API Key" onClose={()=>setLlmCallsOpen(false)} wide><div className="llm-call-summary"><div><span>今日 Token</span><strong>{(usage?.today.total_tokens||0).toLocaleString()}</strong></div><div><span>今日调用</span><strong>{usage?.today.requests||0}</strong></div><div><span>累计 Token</span><strong>{(usage?.total.total_tokens||0).toLocaleString()}</strong></div></div><div className="llm-call-table"><header><span>时间</span><span>用途</span><span>模型</span><span>输入 / 输出</span><span>总计</span></header>{llmCalls.length?llmCalls.map(item=><article key={item.id}><time>{new Date(item.created_at).toLocaleString('zh-CN')}</time><span>{item.purpose_label}</span><span><strong>{item.profile_name}</strong><small>{item.model||item.provider}</small></span><span>{item.prompt_tokens.toLocaleString()} / {item.completion_tokens.toLocaleString()}</span><b>{item.total_tokens.toLocaleString()}{item.estimated?'*':''}</b></article>):<p>还没有模型调用记录。完成一次推荐分析、问 AI 或 Cowork 任务后会显示在这里。</p>}</div></Modal>}
     <GlobalAssistant open={assistantOpen} onOpen={() => setAssistantOpen(true)} onClose={() => setAssistantOpen(false)} showLauncher={Boolean(readerPaper||wikiJob||chatPaper)} pageId={readerPaper ? 'reader' : wikiJob ? 'deepwiki' : chatPaper ? 'paper-chat' : view} pageTitle={readerPaper ? (readerPaper.title_zh || readerPaper.title_en) : wikiJob ? 'DeepWiki' : chatPaper ? (chatPaper.title_zh || chatPaper.title_en) : (nav.find(item => item[0] === view)?.[2] || 'PaperMorrow')} configured={Boolean(settings?.has_llm_api_key)} onOpenSettings={() => { setReaderPaper(null); setWikiJob(null); setChatPaper(null); setView('settings'); setAssistantOpen(false) }}/>
   </div>
 }

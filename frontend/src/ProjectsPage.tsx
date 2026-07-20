@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BookOpenCheck, ChevronRight, FlaskConical, LayoutDashboard, MessageCircle, Plus, Search, Send } from 'lucide-react'
+import { BookOpenCheck, ChevronRight, FlaskConical, LayoutDashboard, MessageCircle, Plus, RefreshCw, Search, Send, Waypoints } from 'lucide-react'
 import { api } from './api'
-import type { DeepWikiJob, Paper, ResearchProject, ResearchStudy } from './types'
+import type { DeepWikiJob, KnowledgeGraphData, Paper, ResearchProject, ResearchStudy } from './types'
 import './projects.css'
 import ExperimentsPanel from './ExperimentsPanel'
 
@@ -15,7 +15,7 @@ export default function ProjectsPage(){
   const [studies,setStudies]=useState<ResearchStudy[]>([])
   const [jobs,setJobs]=useState<DeepWikiJob[]>([])
   const [creating,setCreating]=useState(false)
-  const [projectTab,setProjectTab]=useState<'overview'|'experiments'>('overview')
+  const [projectTab,setProjectTab]=useState<'overview'|'experiments'|'graph'>('overview'),[graph,setGraph]=useState<KnowledgeGraphData|null>(null)
   const [title,setTitle]=useState(''),[question,setQuestion]=useState('')
   const [chat,setChat]=useState(''),[answer,setAnswer]=useState<any|null>(null)
   const [noteTitle,setNoteTitle]=useState('项目笔记'),[noteContent,setNoteContent]=useState('')
@@ -29,11 +29,12 @@ export default function ProjectsPage(){
   const addNote=async()=>{await api(`/api/projects/${active!.id}/notes`,{method:'POST',body:JSON.stringify({title:noteTitle,content:noteContent})});setNoteContent('');setActive(await api(`/api/projects/${active!.id}`))}
   const linkStudy=async(studyId:number)=>{if(studyId)setActive(await api(`/api/projects/${active!.id}/studies/${studyId}`,{method:'POST'}))}
   const ask=async()=>{const result=await api(`/api/projects/${active!.id}/chat`,{method:'POST',body:JSON.stringify({message:chat})});setAnswer(result);setChat('')}
+  const openGraph=async()=>{setProjectTab('graph');setGraph(null);setGraph(await api<KnowledgeGraphData>(`/api/projects/${active!.id}/knowledge-graph`))}
   if(active)return <section className="page-content project-page">
     <button className="project-back" onClick={()=>{setActive(null);load()}}>← 所有项目</button>
     <header className="project-hero"><div><span className="section-kicker">RESEARCH PROJECT</span><h2>{active.title}</h2><p>{active.research_question||'尚未填写研究问题'}</p></div><div><strong>{active.papers?.length||0}</strong><span>项目论文</span></div></header>
-    <nav className="project-tabs"><button className={projectTab==='overview'?'active':''} onClick={()=>setProjectTab('overview')}><LayoutDashboard/>项目总览</button><button className={projectTab==='experiments'?'active':''} onClick={()=>setProjectTab('experiments')}><FlaskConical/>实验记录</button></nav>
-    {projectTab==='experiments'?<ExperimentsPanel projectId={active.id}/>:<div className="project-columns"><main>
+    <nav className="project-tabs"><button className={projectTab==='overview'?'active':''} onClick={()=>setProjectTab('overview')}><LayoutDashboard/>项目总览</button><button className={projectTab==='experiments'?'active':''} onClick={()=>setProjectTab('experiments')}><FlaskConical/>实验记录</button><button className={projectTab==='graph'?'active':''} onClick={openGraph}><Waypoints/>知识关系</button></nav>
+    {projectTab==='experiments'?<ExperimentsPanel projectId={active.id}/>:projectTab==='graph'?<ProjectKnowledgeGraph graph={graph} title={active.title}/>:<div className="project-columns"><main>
       <section className="project-panel"><h3>阅读队列</h3>{active.papers?.length?<div className="project-papers">{active.papers.map(link=><article key={link.paper_id}><div><span>{roleLabels[link.role]}</span><strong>{link.title_zh||link.title}</strong><small>{link.title}</small></div><select value={link.role} onChange={e=>updatePaper(link.paper_id,{role:e.target.value})}>{Object.entries(roleLabels).map(([v,l])=><option value={v} key={v}>{l}</option>)}</select><select value={link.reading_status} onChange={e=>updatePaper(link.paper_id,{reading_status:e.target.value})}>{Object.entries(statusLabels).map(([v,l])=><option value={v} key={v}>{l}</option>)}</select></article>)}</div>:<p className="project-muted">从学习库加入核心论文，建立阅读队列。</p>}</section>
       <section className="project-panel"><h3>从学习库加入</h3><div className="project-add-list">{available.slice(0,8).map(p=><button key={p.id} onClick={()=>addPaper(p.id)}><Plus/><span>{p.title_zh||p.title_en}</span></button>)}</div></section>
       <section className="project-panel"><h3>项目笔记</h3>{active.notes?.map(note=><article className="project-note" key={note.id}><strong>{note.title}</strong><p>{note.content}</p></article>)}<div className="project-note-compose"><input value={noteTitle} onChange={e=>setNoteTitle(e.target.value)} placeholder="笔记标题"/><textarea value={noteContent} onChange={e=>setNoteContent(e.target.value)} placeholder="记录仅属于当前项目的判断、计划或问题"/><button disabled={!noteContent.trim()} onClick={addNote}>保存项目笔记</button></div></section>
@@ -45,3 +46,5 @@ export default function ProjectsPage(){
   </section>
   return <section className="page-content project-page"><header className="project-list-head"><div><span className="section-kicker">PROJECT WORKSPACE</span><h2>研究项目</h2><p>围绕一个研究问题集中管理论文、笔记、实验和调研结果，随时回到最新进展。</p></div><button className="primary" onClick={()=>setCreating(true)}><Plus/>新建项目</button></header>{creating&&<div className="project-create"><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="项目名称"/><textarea value={question} onChange={e=>setQuestion(e.target.value)} placeholder="研究问题"/><button disabled={!title.trim()} onClick={create}>创建</button></div>}<div className="project-list">{projects.map(p=><button key={p.id} onClick={()=>api<ResearchProject>(`/api/projects/${p.id}`).then(setActive)}><BookOpenCheck/><div><strong>{p.title}</strong><span>{p.research_question||'等待定义研究问题'}</span></div><ChevronRight/></button>)}</div>{!projects.length&&!creating&&<div className="project-empty"><Search/><h3>从一个明确问题开始</h3><p>创建项目后，再从现有学习库加入论文。</p></div>}</section>
 }
+
+function ProjectKnowledgeGraph({graph,title}:{graph:KnowledgeGraphData|null;title:string}){if(!graph)return <div className="graph-loading"><RefreshCw className="spin"/>正在构建“{title}”的独立知识关系…</div>;const nodes=graph.nodes.slice(0,100),available=new Set(nodes.map(node=>node.id)),edges=graph.edges.filter(edge=>available.has(edge.source)&&available.has(edge.target)).slice(0,240),positions=new Map<string,{x:number;y:number}>();const groups=[nodes.filter(node=>node.type==='project'),nodes.filter(node=>['paper','note','study','experiment'].includes(node.type)),nodes.filter(node=>!['project','paper','note','study','experiment'].includes(node.type))];groups.forEach((items,column)=>items.forEach((node,index)=>positions.set(node.id,{x:[110,430,790][column],y:60+(index+.5)*(610/Math.max(1,items.length))})));return <div className="knowledge-graph project-knowledge-graph"><header><Waypoints/><div><strong>{title} · 证据化知识关系</strong><span>只显示本项目关联的论文、笔记、专题调研、实验与证据实体</span></div><small>{nodes.length} 个节点 · {edges.length} 条关系</small></header><div className="graph-canvas"><svg viewBox="0 0 940 740" role="img" aria-label={`${title} 项目知识关系图`}>{edges.map((edge,index)=>{const a=positions.get(edge.source),b=positions.get(edge.target);return a&&b?<g key={index}><line x1={a.x} y1={a.y} x2={b.x} y2={b.y}/><title>{edge.evidence||edge.type}</title></g>:null})}{nodes.map(node=>{const point=positions.get(node.id);return point?<g key={node.id} transform={`translate(${point.x} ${point.y})`} className={`graph-node ${node.type}`}><circle r={node.type==='project'?10:node.type==='paper'?8:6}/><title>{node.label}</title><text x="14" y="4">{node.label.length>32?`${node.label.slice(0,32)}…`:node.label}</text></g>:null})}</svg></div><footer><p>项目之间完全隔离；关系仅来自用户关联或保存了来源与证据的记录，不自动生成“语义相似”边。</p></footer></div>}
