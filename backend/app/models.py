@@ -742,3 +742,37 @@ class ReproductionCheck(Base):
     evidence: Mapped[str] = mapped_column(Text, default="")
     details: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PlannerTask(Base):
+    __tablename__ = "planner_tasks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(500))
+    details: Mapped[str] = mapped_column(Text, default="")
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    priority: Mapped[str] = mapped_column(String(16), default="medium", index=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("research_projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class SubmissionDeadline(Base):
+    __tablename__ = "submission_deadlines"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    venue_name: Mapped[str] = mapped_column(String(300), index=True)
+    venue_type: Mapped[str] = mapped_column(String(24), default="conference", index=True)
+    round_name: Mapped[str] = mapped_column(String(160), default="")
+    deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    timezone_name: Mapped[str] = mapped_column(String(80), default="AoE (UTC-12)")
+    domain: Mapped[str] = mapped_column(String(120), default="")
+    website_url: Mapped[str] = mapped_column(Text, default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    remind_days_before: Mapped[int] = mapped_column(Integer, default=14)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    source: Mapped[str] = mapped_column(String(32), default="user")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

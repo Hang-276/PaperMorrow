@@ -9,6 +9,7 @@ import './global-assistant.css'
 type Message = { id: string; role: 'user' | 'assistant'; content: string; pageTitle: string }
 
 const suggestions: Record<string, string[]> = {
+  home: ['根据起始页帮我安排今天的研究工作', '哪些待办和截稿日期最紧急？', '建议我先阅读、做实验还是整理笔记？'],
   today: ['概括当前推荐中最值得优先阅读的论文', '这些论文覆盖了哪些研究路线？', '帮我制定今天的阅读顺序'],
   research: ['总结当前专题调研的主要结论', '哪些结论证据最充分？', '还有哪些研究空白值得追踪？'],
   projects: ['根据当前项目状态建议下一步', '梳理尚未解决的问题', '哪些论文与当前结论存在冲突？'],
@@ -18,6 +19,7 @@ const suggestions: Record<string, string[]> = {
   deepwiki: ['概括当前 Wiki 的核心实现', '哪些模块最值得优先复现？', '指出论文与代码之间仍需核验的部分'],
   domains: ['检查当前专业配置是否完整', '这些评分规则可能有哪些偏差？', '给出更稳健的数据源配置建议'],
   settings: ['解释当前设置会如何影响推荐', '检查还缺少哪些必要配置', '怎样配置更适合本地优先使用？'],
+  planner: ['帮我按紧急程度整理待办', '根据当前 DDL 制定投稿准备计划', '哪些任务应该提前完成以降低截稿风险？'],
 }
 
 function visibleContext(fallbackTitle: string) {
@@ -34,7 +36,7 @@ function visibleContext(fallbackTitle: string) {
   return { title, text: `当前页面：${title}\n\n${text}` }
 }
 
-export default function GlobalAssistant({ open, onOpen, onClose, pageId, pageTitle, configured, onOpenSettings }: {
+export default function GlobalAssistant({ open, onOpen, onClose, pageId, pageTitle, configured, onOpenSettings, showLauncher = true }: {
   open: boolean
   onOpen: () => void
   onClose: () => void
@@ -42,6 +44,7 @@ export default function GlobalAssistant({ open, onOpen, onClose, pageId, pageTit
   pageTitle: string
   configured: boolean
   onOpenSettings: () => void
+  showLauncher?: boolean
 }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -104,7 +107,7 @@ export default function GlobalAssistant({ open, onOpen, onClose, pageId, pageTit
     } catch (error) { setNotice(error instanceof Error ? error.message : '创建笔记时遇到问题') }
   }
 
-  if (!open) return <button className="global-assistant-launcher" onClick={onOpen} aria-label="打开全局助手"><Sparkles/><span>问 AI</span></button>
+  if (!open) return showLauncher ? <button className="global-assistant-launcher" onClick={onOpen} aria-label="打开全局助手"><Sparkles/><span>问 AI</span></button> : null
   return <aside className="global-assistant" aria-label="全局研究助手">
     <header className="global-assistant-head">
       <div className="global-assistant-mark"><Sparkles/></div>

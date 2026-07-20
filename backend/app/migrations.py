@@ -269,6 +269,32 @@ def _migration_008_presentation_drafts(connection) -> None:
     connection.execute(text("CREATE INDEX IF NOT EXISTS ix_presentation_drafts_status ON presentation_drafts(status)"))
 
 
+def _migration_009_planner_deadlines(connection) -> None:
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS planner_tasks (
+        id INTEGER PRIMARY KEY, title VARCHAR(500) NOT NULL, details TEXT NOT NULL DEFAULT '',
+        due_at DATETIME, priority VARCHAR(16) NOT NULL DEFAULT 'medium', status VARCHAR(16) NOT NULL DEFAULT 'pending',
+        project_id INTEGER REFERENCES research_projects(id) ON DELETE SET NULL, completed_at DATETIME,
+        created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL
+    )"""))
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS submission_deadlines (
+        id INTEGER PRIMARY KEY, venue_name VARCHAR(300) NOT NULL, venue_type VARCHAR(24) NOT NULL DEFAULT 'conference',
+        round_name VARCHAR(160) NOT NULL DEFAULT '', deadline_at DATETIME NOT NULL,
+        timezone_name VARCHAR(80) NOT NULL DEFAULT 'AoE (UTC-12)', domain VARCHAR(120) NOT NULL DEFAULT '',
+        website_url TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', remind_days_before INTEGER NOT NULL DEFAULT 14,
+        enabled BOOLEAN NOT NULL DEFAULT 1, source VARCHAR(32) NOT NULL DEFAULT 'user',
+        created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL
+    )"""))
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS ix_planner_tasks_due_at ON planner_tasks(due_at)",
+        "CREATE INDEX IF NOT EXISTS ix_planner_tasks_status ON planner_tasks(status)",
+        "CREATE INDEX IF NOT EXISTS ix_planner_tasks_project ON planner_tasks(project_id)",
+        "CREATE INDEX IF NOT EXISTS ix_submission_deadlines_at ON submission_deadlines(deadline_at)",
+        "CREATE INDEX IF NOT EXISTS ix_submission_deadlines_type ON submission_deadlines(venue_type)",
+        "CREATE INDEX IF NOT EXISTS ix_submission_deadlines_enabled ON submission_deadlines(enabled)",
+    ):
+        connection.execute(text(statement))
+
+
 MIGRATIONS = [
     ("001_domain_packs", _migration_001_domain_packs),
     ("002_research_projects", _migration_002_research_projects),
@@ -278,6 +304,7 @@ MIGRATIONS = [
     ("006_unified_notes", _migration_006_unified_notes),
     ("007_experiment_records", _migration_007_experiment_records),
     ("008_presentation_drafts", _migration_008_presentation_drafts),
+    ("009_planner_deadlines", _migration_009_planner_deadlines),
 ]
 
 

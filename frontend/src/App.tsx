@@ -6,6 +6,7 @@ import {
   MessageCircle, Send, Plus, Bot, User,
   BarChart3, KeyRound, Link2, Pencil, Trash2, Type,
   FlaskConical, Layers3, FolderKanban, ClipboardCheck,
+  Bell, House, ListTodo, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -18,11 +19,13 @@ import DomainPacksPage from './DomainPacksPage'
 import ProjectsPage from './ProjectsPage'
 import NotesPage from './NotesPage'
 import GlobalAssistant from './GlobalAssistant'
+import HomePage from './HomePage'
+import PlannerPage from './PlannerPage'
 import './features.css'
 import './library.css'
-import type { AppSettings, Batch, ChatMessage, ChatSession, DeepWikiJob, LLMProfile, Paper, ResearchProfile, Tag, TokenUsageStats } from './types'
+import type { AppSettings, Batch, ChatMessage, ChatSession, DeepWikiJob, LLMProfile, Paper, PlannerTask, ResearchProfile, SubmissionDeadline, Tag, TokenUsageStats } from './types'
 
-type View = 'today' | 'research' | 'projects' | 'notes' | 'history' | 'learning' | 'deepwiki' | 'domains' | 'settings'
+type View = 'home' | 'today' | 'planner' | 'research' | 'projects' | 'notes' | 'history' | 'learning' | 'deepwiki' | 'domains' | 'settings'
 
 const ReaderWorkspace = lazy(() => import('./ReaderWorkspace'))
 const WikiWorkspace = lazy(() => import('./WikiWorkspace'))
@@ -39,7 +42,7 @@ const apiPresets = [
 const dailyDomains=[['ai','人工智能','关注高质量会议、期刊与前沿工作'],['computer','计算机科学','系统、软件与计算基础'],['physics','物理学','理论、实验与交叉物理'],['math','数学','纯数、应用与统计'],['life-sciences','生命科学','分子、细胞与生物信息'],['clinical-medicine','临床医学','循证研究与临床试验'],['chemistry-materials','化学与材料','化学、催化与材料'],['economics-finance','经济学与金融','经济、计量与金融']] as const
 
 export default function App() {
-  const [view, setView] = useState<View>('today')
+  const [view, setView] = useState<View>('home')
   const [theme, setTheme] = useState<'light'|'dark'>(() => (localStorage.getItem('papermorrow-theme') as 'light'|'dark') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'))
   const [mobileMenu, setMobileMenu] = useState(false)
   const [tags, setTags] = useState<Tag[]>([])
@@ -64,6 +67,10 @@ export default function App() {
   const [selectedProfileId, setSelectedProfileId] = useState<number|''>('')
   const [activeDomain, setActiveDomain] = useState<string>('ai')
   const [assistantOpen, setAssistantOpen] = useState(false)
+  const [plannerTasks,setPlannerTasks]=useState<PlannerTask[]>([])
+  const [submissionDeadlines,setSubmissionDeadlines]=useState<SubmissionDeadline[]>([])
+  const [noteCreateSignal,setNoteCreateSignal]=useState(0)
+  const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>localStorage.getItem('papermorrow-sidebar-collapsed')==='1')
 
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('papermorrow-theme', theme) }, [theme])
   useEffect(() => {
@@ -71,13 +78,17 @@ export default function App() {
   }, [settings?.font_size])
 
   const load = async () => {
-    const [tagData, settingData, todayData, historyData, jobData, researchData] = await Promise.all([
+    const [tagData, settingData, todayData, historyData, jobData, researchData, taskData, deadlineData] = await Promise.all([
       api<Tag[]>('/api/tags'), api<AppSettings>('/api/settings'), api<Batch[]>('/api/recommendations/today'),
       api<Paper[]>('/api/recommendations/history'), api<DeepWikiJob[]>('/api/deepwiki/jobs'), api<ResearchProfile[]>('/api/research-profiles'),
+      api<PlannerTask[]>('/api/planner/tasks'), api<SubmissionDeadline[]>('/api/planner/deadlines'),
     ])
     setTags(tagData); setSettings(settingData); setToday(todayData); setHistory(historyData); setJobs(jobData); setResearchProfiles(researchData)
+    setPlannerTasks(taskData); setSubmissionDeadlines(deadlineData)
     if (!selectedTags.length) setSelectedTags(settingData.daily_tag_ids.length ? settingData.daily_tag_ids : tagData.filter(t=>t.domain==='ai').slice(0, 2).map(t => t.id))
   }
+
+  const loadPlanner=async()=>{const [taskData,deadlineData]=await Promise.all([api<PlannerTask[]>('/api/planner/tasks'),api<SubmissionDeadline[]>('/api/planner/deadlines')]);setPlannerTasks(taskData);setSubmissionDeadlines(deadlineData)}
 
   useEffect(() => { load().catch(error => setMessage(error.message)) }, [])
   useEffect(() => {
@@ -179,22 +190,25 @@ export default function App() {
   }
 
   const nav = [
-    ['today', Radar, '今日推荐'], ['research', FlaskConical, '专题调研'], ['projects', FolderKanban, '研究项目'], ['notes', NotebookPen, '学习笔记'], ['history', History, '推荐历史'], ['learning', Library, '学习库'],
+    ['home', House, '起始页'], ['today', Radar, '论文推荐'], ['planner', ListTodo, '待办与 DDL'], ['research', FlaskConical, '专题调研'], ['projects', FolderKanban, '研究项目'], ['notes', NotebookPen, '学习笔记'], ['history', History, '推荐历史'], ['learning', Library, '学习库'],
     ['deepwiki', Code2, 'DeepWiki'], ['domains', Layers3, '专业配置'], ['settings', SettingsIcon, '设置'],
   ] as const
 
-  return <div className="app-shell">
+  const reminderCount=submissionDeadlines.filter(item=>{const days=Math.ceil((new Date(item.deadline_at).getTime()-Date.now())/86_400_000);return days>=0&&days<=item.remind_days_before}).length+plannerTasks.filter(item=>item.due_at&&new Date(item.due_at).getTime()<=Date.now()+86_400_000).length
+
+  return <div className={`app-shell ${sidebarCollapsed?'sidebar-collapsed':''}`}>
     <aside className={`sidebar-shell ${mobileMenu ? 'open' : ''}`}>
-      <div className="brand"><div className="brand-mark"><img src="/papermorrow-logo.png" alt=""/></div><div><strong>PaperMorrow</strong><span>Read what matters next</span></div></div>
-      <nav>{nav.map(([id, Icon, label]) => <button key={id} className={view === id ? 'active' : ''} onClick={() => { setView(id); setMobileMenu(false) }}><Icon size={19}/><span>{label}</span>{view === id && <ChevronRight size={16}/>}</button>)}</nav>
+      <div className="brand"><div className="brand-mark"><img src="/papermorrow-logo.png" alt=""/></div><div><strong>PaperMorrow</strong><span>Read what matters next</span></div><button className="sidebar-collapse" title={sidebarCollapsed?'展开侧栏':'收起侧栏'} onClick={()=>setSidebarCollapsed(value=>{localStorage.setItem('papermorrow-sidebar-collapsed',value?'0':'1');return !value})}>{sidebarCollapsed?<PanelLeftOpen/>:<PanelLeftClose/>}</button></div>
+      <nav>{nav.map(([id, Icon, label]) => <button key={id} title={sidebarCollapsed?label:undefined} className={view === id ? 'active' : ''} onClick={() => { setView(id); setMobileMenu(false) }}><Icon size={19}/><span>{label}</span>{view === id && <ChevronRight size={16}/>}</button>)}</nav>
       <button className="sidebar-foot" onClick={() => setAssistantOpen(true)}><Sparkles size={17}/><div><strong>研究助手</strong><span>{settings?.has_llm_api_key ? '随时询问当前页面' : '连接模型后开始'}</span></div><i className={settings?.has_llm_api_key ? 'online' : ''}/></button>
     </aside>
 
     <main className="main-shell">
-      <header className="topbar"><button className="icon-button menu-button" onClick={() => setMobileMenu(!mobileMenu)}><Menu/></button><div><span className="eyebrow">PAPERMORROW · RESEARCH COMPANION</span><h1>{nav.find(item => item[0] === view)?.[2]}</h1></div><div className="topbar-actions"><button className="context-ai-button" aria-label="问当前页面" onClick={() => setAssistantOpen(true)}><Sparkles/><span>问当前页面</span></button><span className="date-pill"><CalendarClock size={16}/>{new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })}</span><button className="theme-toggle" aria-label={theme === 'light' ? '切换深色模式' : '切换浅色模式'} onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>{theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}</button></div></header>
+      <header className="topbar"><button className="icon-button menu-button" onClick={() => setMobileMenu(!mobileMenu)}><Menu/></button><div><span className="eyebrow">PAPERMORROW · RESEARCH COMPANION</span><h1>{nav.find(item => item[0] === view)?.[2]}</h1></div><div className="topbar-actions"><button className="context-ai-button" aria-label="问当前页面" onClick={() => setAssistantOpen(true)}><Sparkles/><span>问当前页面</span></button><button className="theme-toggle planner-badge-button" aria-label="查看待办与截稿提醒" onClick={()=>setView('planner')}><Bell/>{reminderCount>0&&<b>{reminderCount>99?'99+':reminderCount}</b>}</button><span className="date-pill"><CalendarClock size={16}/>{new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })}</span><button className="theme-toggle" aria-label={theme === 'light' ? '切换深色模式' : '切换浅色模式'} onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>{theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}</button></div></header>
 
       {message && <div className="toast"><span>{busy && <CircleDashed className="spin" size={17}/>} {message}</span><button onClick={() => setMessage('')}><X size={16}/></button></div>}
 
+      {view === 'home' && <HomePage tasks={plannerTasks} deadlines={submissionDeadlines} today={today} settings={settings} onNavigate={setView} onOpenAssistant={()=>setAssistantOpen(true)} onPlannerChanged={loadPlanner} onStartNote={()=>{setNoteCreateSignal(value=>value+1);setView('notes')}}/>}
       {view === 'today' && <section className="page-content">
         <div className="hero-panel"><div><span className="section-kicker">TOMORROW'S READING, CURATED TODAY</span><h2>广度发现，也追踪你的细分问题</h2><p>规则多路召回与永久去重；LLM 同时判断方向关联、创新强度、研究价值和阅读性价比。</p></div><div className="generate-controls"><select value={recommendMode} onChange={e=>setRecommendMode(e.target.value as any)}><option value="broad">广度推荐</option><option value="mixed">聚焦 + 探索</option><option value="focus">仅聚焦方向</option></select>{recommendMode!=='broad'&&<select value={selectedProfileId} onChange={e=>{const id=Number(e.target.value)||'';setSelectedProfileId(id);const found=researchProfiles.find(item=>item.id===id);if(found)setActiveDomain(found.domain)}}><option value="">选择细分方向</option>{researchProfiles.map(profile=><option key={profile.id} value={profile.id}>{profile.name}</option>)}</select>}<select value={count} onChange={e => setCount(Number(e.target.value))}>{[3,5,8,10,15,20].map(n => <option key={n} value={n}>推荐 {n} 篇</option>)}</select><button className="primary" disabled={busy} onClick={generate}>{busy ? <RefreshCw className="spin" size={18}/> : <Sparkles size={18}/>}生成推荐</button></div></div>
         {settings&&<div className={`daily-home-plan ${settings.daily_enabled?'active':''}`}><div className="daily-home-icon"><CalendarClock/></div><div><span>今日计划</span><strong>{settings.daily_enabled?'每日推荐已开启':'每日推荐未开启'}</strong><small>{settings.daily_profile_ids.length?`${settings.daily_profile_ids.length} 个自定义研究方向轮换`:settings.daily_tag_ids.length?`${settings.daily_tag_ids.length} 个专业方向`:'尚未选择方向'} · {settings.daily_time} · 每日 {settings.daily_count} 篇</small></div><button className="daily-config-link" onClick={()=>setView('settings')}>编辑计划</button><button aria-label={settings.daily_enabled?'关闭每日推荐':'开启每日推荐'} className={`switch ${settings.daily_enabled?'on':''}`} onClick={toggleDailyPlan}><i/></button></div>}
@@ -208,7 +222,8 @@ export default function App() {
       {view === 'learning' && <LibraryPage onRead={setReaderPaper} onNote={openUnifiedNote} onChat={setChatPaper} onRelated={findRelated} onRepo={discoverRepo} onWiki={startWiki} onOpenSettings={()=>setView('settings')} onDataChanged={load}/>}
       {view === 'research' && <ResearchPage onDataChanged={load}/>} 
       {view === 'projects' && <ProjectsPage/>}
-      {view === 'notes' && <NotesPage focusPaperId={noteFocusPaperId}/>}
+      {view === 'notes' && <NotesPage focusPaperId={noteFocusPaperId} createSignal={noteCreateSignal}/>}
+      {view === 'planner' && <PlannerPage tasks={plannerTasks} deadlines={submissionDeadlines} onChanged={loadPlanner}/>}
 
       {view === 'deepwiki' && <DeepWikiPage jobs={jobs} onOpen={setWikiJob} onRetry={retryWiki}/>} 
       {view === 'domains' && <DomainPacksPage/>}
@@ -220,7 +235,7 @@ export default function App() {
     {wikiJob && <Suspense fallback={<div className="reader-boot"><RefreshCw className="spin" size={20}/><span>正在打开完整 Wiki…</span></div>}><WikiWorkspace job={wikiJob} fontSize={settings?.font_size || 16} onFontSizePreview={previewFontSize} onFontSizeSave={saveFontSize} onClose={() => setWikiJob(null)} onRetry={() => retryWiki(wikiJob)}/></Suspense>} 
     {chatPaper && <ChatPanel paper={chatPaper} configured={Boolean(settings?.has_llm_api_key)} onClose={() => setChatPaper(null)} onOpenSettings={() => { setChatPaper(null); setView('settings') }}/>} 
     {readerPaper && <Suspense fallback={<div className="reader-boot"><RefreshCw className="spin" size={20}/><span>正在准备智能阅读器…</span></div>}><ReaderWorkspace paper={readerPaper} configured={Boolean(settings?.has_llm_api_key)} onClose={()=>setReaderPaper(null)} onSaved={load} onOpenNotes={()=>{setNoteFocusPaperId(readerPaper.id);setView('notes')}}/></Suspense>}
-    <GlobalAssistant open={assistantOpen} onOpen={() => setAssistantOpen(true)} onClose={() => setAssistantOpen(false)} pageId={readerPaper ? 'reader' : wikiJob ? 'deepwiki' : chatPaper ? 'paper-chat' : view} pageTitle={readerPaper ? (readerPaper.title_zh || readerPaper.title_en) : wikiJob ? 'DeepWiki' : chatPaper ? (chatPaper.title_zh || chatPaper.title_en) : (nav.find(item => item[0] === view)?.[2] || 'PaperMorrow')} configured={Boolean(settings?.has_llm_api_key)} onOpenSettings={() => { setReaderPaper(null); setWikiJob(null); setChatPaper(null); setView('settings'); setAssistantOpen(false) }}/>
+    <GlobalAssistant open={assistantOpen} onOpen={() => setAssistantOpen(true)} onClose={() => setAssistantOpen(false)} showLauncher={Boolean(readerPaper||wikiJob||chatPaper)} pageId={readerPaper ? 'reader' : wikiJob ? 'deepwiki' : chatPaper ? 'paper-chat' : view} pageTitle={readerPaper ? (readerPaper.title_zh || readerPaper.title_en) : wikiJob ? 'DeepWiki' : chatPaper ? (chatPaper.title_zh || chatPaper.title_en) : (nav.find(item => item[0] === view)?.[2] || 'PaperMorrow')} configured={Boolean(settings?.has_llm_api_key)} onOpenSettings={() => { setReaderPaper(null); setWikiJob(null); setChatPaper(null); setView('settings'); setAssistantOpen(false) }}/>
   </div>
 }
 
