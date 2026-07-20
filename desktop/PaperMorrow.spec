@@ -31,6 +31,7 @@ a = Analysis(
     datas=[
         (str(ROOT / "frontend" / "dist"), "frontend/dist"),
         (str(ROOT / "backend" / "prompts"), "backend/prompts"),
+        (str(ROOT / "backend" / "cowork_skills"), "backend/cowork_skills"),
         (str(ROOT / "presentation-studio" / "dist"), "presentation-studio/dist"),
         (str(ROOT / "presentation-studio" / "node_modules"), "presentation-studio/node_modules"),
         (str(ROOT / "presentation-studio" / "package.json"), "presentation-studio"),
