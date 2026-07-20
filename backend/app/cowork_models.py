@@ -22,12 +22,17 @@ class CoworkSession(Base):
     thinking_effort: Mapped[str] = mapped_column(String(16), default="medium")
     context_summary: Mapped[str] = mapped_column(Text, default="")
     stop_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    agent_token_budget: Mapped[int] = mapped_column(Integer, default=120_000)
+    agent_tokens_used: Mapped[int] = mapped_column(Integer, default=0)
+    max_parallel_agents: Mapped[int] = mapped_column(Integer, default=3)
+    delegation_budget: Mapped[int] = mapped_column(Integer, default=8)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     messages: Mapped[list["CoworkMessage"]] = relationship(back_populates="session", cascade="all, delete-orphan")
     tasks: Mapped[list["CoworkTask"]] = relationship(back_populates="session", cascade="all, delete-orphan")
     grants: Mapped[list["PermissionGrant"]] = relationship(back_populates="session", cascade="all, delete-orphan")
+    agents: Mapped[list["CoworkAgentInstance"]] = relationship(back_populates="session", cascade="all, delete-orphan")
 
 
 class CoworkMessage(Base):
@@ -149,6 +154,61 @@ class CoworkArtifact(Base):
     sources_json: Mapped[str] = mapped_column(Text, default="[]")
     metadata_json: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class CoworkAgentInstance(Base):
+    """A bounded supervisor or expert process within one Cowork session."""
+
+    __tablename__ = "cowork_agent_instances"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("cowork_sessions.id", ondelete="CASCADE"), index=True)
+    task_id: Mapped[int | None] = mapped_column(ForeignKey("cowork_tasks.id", ondelete="SET NULL"), nullable=True, index=True)
+    parent_agent_id: Mapped[str | None] = mapped_column(ForeignKey("cowork_agent_instances.id", ondelete="SET NULL"), nullable=True, index=True)
+    role: Mapped[str] = mapped_column(String(80), index=True)
+    display_name: Mapped[str] = mapped_column(String(160))
+    status: Mapped[str] = mapped_column(String(24), default="idle", index=True)
+    objective: Mapped[str] = mapped_column(Text, default="")
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    allowed_tools_json: Mapped[str] = mapped_column(Text, default="[]")
+    context_refs_json: Mapped[str] = mapped_column(Text, default="[]")
+    token_budget: Mapped[int] = mapped_column(Integer, default=20_000)
+    tokens_used: Mapped[int] = mapped_column(Integer, default=0)
+    max_iterations: Mapped[int] = mapped_column(Integer, default=6)
+    iterations_used: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    session: Mapped[CoworkSession] = relationship(back_populates="agents")
+
+
+class CoworkDelegation(Base):
+    """Auditable hand-off from the supervisor to one constrained expert."""
+
+    __tablename__ = "cowork_delegations"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("cowork_sessions.id", ondelete="CASCADE"), index=True)
+    task_id: Mapped[int | None] = mapped_column(ForeignKey("cowork_tasks.id", ondelete="SET NULL"), nullable=True, index=True)
+    step_id: Mapped[int | None] = mapped_column(ForeignKey("cowork_steps.id", ondelete="SET NULL"), nullable=True, index=True)
+    parent_agent_id: Mapped[str] = mapped_column(ForeignKey("cowork_agent_instances.id", ondelete="CASCADE"), index=True)
+    child_agent_id: Mapped[str] = mapped_column(ForeignKey("cowork_agent_instances.id", ondelete="CASCADE"), unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(24), default="pending", index=True)
+    objective: Mapped[str] = mapped_column(Text)
+    input_context_json: Mapped[str] = mapped_column(Text, default="[]")
+    output_schema_json: Mapped[str] = mapped_column(Text, default="{}")
+    result_json: Mapped[str] = mapped_column(Text, default="{}")
+    result_summary: Mapped[str] = mapped_column(Text, default="")
+    token_budget: Mapped[int] = mapped_column(Integer, default=20_000)
+    tokens_used: Mapped[int] = mapped_column(Integer, default=0)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class SkillManifest(Base):

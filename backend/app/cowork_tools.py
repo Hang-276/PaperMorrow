@@ -113,6 +113,10 @@ class CoworkToolRegistry:
             raise ValueError("未知工具") from exc
 
     def invoke(self, db: Session, session_id: str, name: str, arguments: dict[str, Any], *, approved: bool = False, page_scope: set[str] | None = None, step_id: int | None = None) -> dict[str, Any]:
+        if approved:
+            write_audit(db, "tool.approval_bypass_rejected", f"拒绝工具 {name} 的布尔审批旁路", session_id=session_id)
+            db.flush()
+            raise ToolDenied("不能通过 approved=True 执行工具；必须批准已冻结参数的 ToolCall")
         spec = self.get(name)
         try:
             parsed = spec.arguments.model_validate(arguments)

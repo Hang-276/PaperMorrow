@@ -8,12 +8,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .cowork_models import CoworkArtifact, CoworkMessage, CoworkSession, CoworkStep, CoworkTask, PermissionGrant, SkillManifest, ToolCall
+from .cowork_models import CoworkAgentInstance, CoworkArtifact, CoworkDelegation, CoworkMessage, CoworkSession, CoworkStep, CoworkTask, PermissionGrant, SkillManifest, ToolCall
+from .cowork_agents import ContextReference, EXPERT_ROLES, agent_state, create_delegation, execute_delegation, stop_agent, stop_all_experts
 from .cowork_runtime import add_message, cancel_session, create_plan, create_session, pause_session, resume_session, retry_step, run_next_step
 from .cowork_security import create_grant, revoke_grant
 from .cowork_tools import DEFAULT_REGISTRY
 from .database import get_db
 from .settings_service import get_active_llm_profile
+from .llm import LLMNotConfigured
 from .cowork_skills import skill_dict
 
 
@@ -58,6 +60,21 @@ class PlanStepInput(StrictPayload):
 
 class PlanUpdate(StrictPayload):
     steps: list[PlanStepInput] = Field(min_length=3, max_length=8)
+
+
+class DelegationCreate(StrictPayload):
+    role: str = Field(min_length=1, max_length=80)
+    objective: str = Field(min_length=1, max_length=20_000)
+    context_refs: list[ContextReference] = Field(default_factory=list, max_length=50)
+    token_budget: int | None = Field(default=None, ge=1000, le=50_000)
+    step_id: int | None = Field(default=None, gt=0)
+    parent_agent_id: str | None = Field(default=None, max_length=64)
+
+
+class TeamAssemble(StrictPayload):
+    roles: list[str] = Field(min_length=1, max_length=3)
+    context_refs: list[ContextReference] = Field(default_factory=list, max_length=50)
+    token_budget_each: int | None = Field(default=None, ge=1000, le=50_000)
 
 
 def _session(db: Session, session_id: str) -> CoworkSession:
@@ -110,6 +127,11 @@ def list_skills(db: Session = Depends(get_db)) -> list[dict]:
     return [skill_dict(item) for item in db.scalars(select(SkillManifest).where(SkillManifest.enabled.is_(True)).order_by(SkillManifest.name)).all()]
 
 
+@router.get("/expert-roles")
+def list_expert_roles() -> list[dict]:
+    return [item.public_dict() for item in EXPERT_ROLES.values()]
+
+
 @router.get("/sessions")
 def list_sessions(db: Session = Depends(get_db)) -> list[dict]:
     return [session_dict(db, item) for item in db.scalars(select(CoworkSession).order_by(CoworkSession.updated_at.desc())).all()]
@@ -125,6 +147,93 @@ def new_session(payload: SessionCreate, db: Session = Depends(get_db)) -> dict:
 @router.get("/sessions/{session_id}")
 def get_session(session_id: str, db: Session = Depends(get_db)) -> dict:
     return session_dict(db, _session(db, session_id), detail=True)
+
+
+@router.get("/sessions/{session_id}/agents")
+def list_session_agents(session_id: str, db: Session = Depends(get_db)) -> dict:
+    state = agent_state(db, _session(db, session_id))
+    db.commit()
+    return state
+
+
+@router.post("/sessions/{session_id}/agents/{agent_id}/stop")
+def stop_session_agent(session_id: str, agent_id: str, db: Session = Depends(get_db)) -> dict:
+    item = _session(db, session_id)
+    agent = db.get(CoworkAgentInstance, agent_id)
+    if not agent or agent.session_id != session_id or agent.parent_agent_id is None:
+        raise HTTPException(404, "专家实例不存在")
+    stop_agent(db, agent); db.commit()
+    return agent_state(db, item)
+
+
+@router.post("/sessions/{session_id}/agents/stop-all")
+def stop_session_agents(session_id: str, db: Session = Depends(get_db)) -> dict:
+    item = _session(db, session_id)
+    stop_all_experts(db, item); db.commit()
+    return agent_state(db, item)
+
+
+@router.post("/sessions/{session_id}/delegations", status_code=201)
+def new_delegation(session_id: str, payload: DelegationCreate, db: Session = Depends(get_db)) -> dict:
+    item = _session(db, session_id)
+    try:
+        delegation = create_delegation(
+            db, item, role=payload.role, objective=payload.objective,
+            context_refs=payload.context_refs, token_budget=payload.token_budget,
+            step_id=payload.step_id, parent_agent_id=payload.parent_agent_id,
+        )
+    except (ValueError, PermissionError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    db.commit()
+    return {"delegation_id": delegation.id, **agent_state(db, item)}
+
+
+@router.post("/sessions/{session_id}/agents/assemble", status_code=201)
+def assemble_team(session_id: str, payload: TeamAssemble, db: Session = Depends(get_db)) -> dict:
+    item = _session(db, session_id)
+    if len(set(payload.roles)) != len(payload.roles):
+        raise HTTPException(422, "专家角色不能重复")
+    try:
+        for role in payload.roles:
+            spec = EXPERT_ROLES.get(role)
+            if not spec:
+                raise ValueError("未知专家角色")
+            create_delegation(
+                db, item, role=role,
+                objective=f"围绕研究目标“{item.goal}”完成{spec.display_name}子任务，并返回可追溯结构化结果。",
+                context_refs=payload.context_refs, token_budget=payload.token_budget_each,
+            )
+    except (ValueError, PermissionError) as exc:
+        db.rollback()
+        raise HTTPException(422, str(exc)) from exc
+    except RuntimeError as exc:
+        db.rollback()
+        raise HTTPException(409, str(exc)) from exc
+    db.commit()
+    return agent_state(db, item)
+
+
+@router.post("/sessions/{session_id}/agents/run")
+async def run_team(session_id: str, db: Session = Depends(get_db)) -> dict:
+    item = _session(db, session_id)
+    queued = db.scalars(select(CoworkDelegation).where(
+        CoworkDelegation.session_id == session_id,
+        CoworkDelegation.status.in_(["pending", "paused"]),
+    ).order_by(CoworkDelegation.created_at).limit(item.max_parallel_agents)).all()
+    if not queued:
+        return agent_state(db, item)
+    try:
+        # Deliberately serialize DB commits; experts remain isolated and SQLite stays reliable.
+        for delegation in queued:
+            await execute_delegation(db, delegation)
+    except LLMNotConfigured as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+    db.expire_all()
+    return agent_state(db, _session(db, session_id))
 
 
 @router.put("/sessions/{session_id}")

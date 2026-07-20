@@ -17,6 +17,7 @@ PURPOSE_LABELS = {
     "analysis": "论文摘要与分析",
     "chat": "论文对话",
     "workspace_chat": "全局助手",
+    "cowork_expert": "Cowork 专家",
     "translation": "论文翻译",
     "deepwiki": "DeepWiki",
     "other": "其他",

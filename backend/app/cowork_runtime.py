@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .cowork_models import CoworkMessage, CoworkSession, CoworkStep, CoworkTask
+from .cowork_agents import ensure_supervisor, pause_experts, resume_experts, stop_all_experts
 from .cowork_security import write_audit
 from .llm import LLMClient, LLMNotConfigured
 
@@ -20,6 +21,9 @@ def repair_interrupted_sessions(db: Session) -> int:
     sessions = db.scalars(select(CoworkSession).where(CoworkSession.status == "running")).all()
     for session in sessions:
         session.status = "paused"
+        supervisor = ensure_supervisor(db, session)
+        supervisor.status = "paused"
+        pause_experts(db, session.id)
         for step in db.scalars(select(CoworkStep).join(CoworkTask).where(CoworkTask.session_id == session.id, CoworkStep.status == "running")).all():
             step.status = "paused"
             step.result_summary = step.result_summary or "应用退出时此步骤尚未完成，已从检查点安全暂停。"
@@ -40,6 +44,7 @@ def create_session(db: Session, goal: str, *, title: str = "", response_detail: 
     if goal:
         add_message(db, session.id, "user", goal)
         create_plan(db, session)
+    ensure_supervisor(db, session)
     return session
 
 
@@ -73,13 +78,15 @@ def create_plan(db: Session, session: CoworkSession) -> CoworkTask:
 async def run_next_step(db: Session, session: CoworkSession) -> CoworkStep | None:
     if session.stop_requested or session.status == "cancelled":
         raise RuntimeError("任务已停止")
+    supervisor = ensure_supervisor(db, session)
     task = db.scalar(select(CoworkTask).where(CoworkTask.session_id == session.id).order_by(CoworkTask.id.desc())) or create_plan(db, session)
     step = db.scalar(select(CoworkStep).where(CoworkStep.task_id == task.id, CoworkStep.status.in_(["pending", "failed"])).order_by(CoworkStep.position))
     if not step:
         task.status = session.status = "completed"
+        supervisor.status = "completed"
         add_message(db, session.id, "assistant", "任务计划已完成。请在产物与来源区核对结果；未执行的外部操作不会被视为完成。")
         return None
-    step.status = "running"; step.started_at = datetime.now(timezone.utc); session.status = task.status = "running"
+    step.status = "running"; step.started_at = datetime.now(timezone.utc); session.status = task.status = "running"; supervisor.status = "running"
     db.flush()
     if session.stop_requested:
         step.status = "cancelled"; session.status = "cancelled"
@@ -94,11 +101,21 @@ async def run_next_step(db: Session, session: CoworkSession) -> CoworkStep | Non
         client = LLMClient(db)
         if not client.configured:
             step.status = "paused"; session.status = "paused"
+            supervisor.status = "paused"
             step.result_summary = "未配置模型，已可靠暂停；计划、权限和历史均已保存。"
             add_message(db, session.id, "assistant", "当前没有可用的 LLM Profile。我已安全暂停任务，没有调用网络或工具；配置模型后可从此检查点继续。")
             return step
         context = _bounded_context(db, session.id)
+        db.commit()  # Publish the running checkpoint so a concurrent stop can revoke it.
         answer = await client.chat_about_workspace("AI 协作", context, [{"role": "user", "content": f"研究目标：{session.goal}\n当前步骤：{step.title}\n请只基于已提供上下文推进并说明证据限制。"}], session.response_detail)
+        db.expire_all()
+        session = db.get(CoworkSession, session.id)
+        step = db.get(CoworkStep, step.id)
+        if not session or not step:
+            raise RuntimeError("任务检查点已不存在")
+        if session.stop_requested or session.status in {"cancelled", "paused"} or step.status in {"cancelled", "paused"}:
+            write_audit(db, "step.result_discarded", "丢弃停止或暂停后返回的模型结果", session_id=session.id, details={"step_id": step.id})
+            return step
         add_message(db, session.id, "assistant", answer)
         step.result_summary = answer[:500]
     step.status = "completed"; step.finished_at = datetime.now(timezone.utc)
@@ -106,14 +123,18 @@ async def run_next_step(db: Session, session: CoworkSession) -> CoworkStep | Non
     next_step = db.scalar(select(CoworkStep).where(CoworkStep.task_id == task.id, CoworkStep.status == "pending"))
     if not next_step:
         task.status = session.status = "completed"
+        supervisor.status = "completed"
     else:
         task.status = session.status = "planned"
+        supervisor.status = "idle"
     return step
 
 
 def pause_session(db: Session, session: CoworkSession) -> None:
     if session.status not in TERMINAL_STATUSES:
         session.status = "paused"
+        ensure_supervisor(db, session).status = "paused"
+        pause_experts(db, session.id)
         write_audit(db, "session.paused", "暂停 Cowork 任务", session_id=session.id, actor="user")
 
 
@@ -121,6 +142,8 @@ def resume_session(db: Session, session: CoworkSession) -> None:
     if session.status == "cancelled":
         raise RuntimeError("已取消任务不能继续；请新建会话")
     session.stop_requested = False; session.status = "planned"
+    ensure_supervisor(db, session).status = "idle"
+    resume_experts(db, session.id)
     for step in db.scalars(select(CoworkStep).join(CoworkTask).where(CoworkTask.session_id == session.id, CoworkStep.status == "paused")).all():
         step.status = "pending"
     write_audit(db, "session.resumed", "从检查点继续 Cowork 任务", session_id=session.id, actor="user")
@@ -128,6 +151,8 @@ def resume_session(db: Session, session: CoworkSession) -> None:
 
 def cancel_session(db: Session, session: CoworkSession) -> None:
     session.stop_requested = True; session.status = "cancelled"
+    ensure_supervisor(db, session).status = "cancelled"
+    stop_all_experts(db, session)
     for step in db.scalars(select(CoworkStep).join(CoworkTask).where(CoworkTask.session_id == session.id, CoworkStep.status.in_(["pending", "running", "paused"]))).all():
         step.status = "cancelled"; step.finished_at = datetime.now(timezone.utc)
     write_audit(db, "session.cancelled", "立即停止 Cowork 任务", session_id=session.id, actor="user")
