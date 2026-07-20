@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
 if [ ! -x ".venv-paper/bin/python" ]; then
@@ -9,7 +9,7 @@ if [ ! -x ".venv-paper/bin/python" ]; then
 fi
 
 if ! .venv-paper/bin/python -c "import fastapi, sqlalchemy, httpx, apscheduler" >/dev/null 2>&1; then
-  .venv-paper/bin/python -m pip install -r requirements.txt
+  .venv-paper/bin/python -m pip install -e .
 fi
 
 if [ ! -d "frontend/node_modules" ]; then
@@ -28,4 +28,4 @@ if [ ! -f "presentation-studio/dist/src/cli.js" ]; then
   npm --prefix presentation-studio run build
 fi
 
-exec .venv-paper/bin/python main.py
+exec .venv-paper/bin/python scripts/launcher.py

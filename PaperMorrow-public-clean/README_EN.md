@@ -8,12 +8,16 @@
 
 <p align="center">
   <a href="README.md">简体中文</a> ·
-  <a href="../../releases/tag/v0.5.0">v0.5.0 Beta</a> ·
-  <a href="DESKTOP_BUILD.md">Build guide</a>
+  <a href="../../releases/tag/v0.5.1">v0.5.1 Beta</a> ·
+  <a href="docs/DESKTOP_BUILD.md">Build guide</a>
 </p>
 
 > [!IMPORTANT]
-> PaperMorrow is currently in **Beta**. Back up important research data. Model output must be verified by a researcher and never replaces the original paper, experiment record, or professional judgment.
+> PaperMorrow is a personal vibe-coding project and is still in **Beta**. It can already handle useful research workflows, but there will be rough edges. Back up important material and always verify AI output against the original paper and experiment record.
+
+I wanted a research workspace that felt more connected than a PDF collection and more useful than another chat box—something that could carry an idea through discovery, close reading, notes, projects, experiments, deadlines, presentations, and AI-assisted work. I could not find exactly the tool I wanted, so I started learning and building PaperMorrow one piece at a time. I am sharing it in case it also helps with a thesis, course project, graduate research, or an independent idea.
+
+This is an independent hobby project, not an official product from a university, lab, or company. If it solves a problem for you, you are welcome to use it, share feedback, or help shape what it becomes.
 
 ## Download the desktop app
 
@@ -21,9 +25,9 @@ Installers are hosted directly on GitHub Releases—no external file hosting is 
 
 | Platform | Download | Notes |
 |---|---|---|
-| macOS 12+ | [DMG](../../releases/download/v0.5.0/PaperMorrow-macOS.dmg) | The current local release targets Apple silicon; Apple notarization is not complete |
-| Windows 10/11 x64 | [Installer](../../releases/download/v0.5.0/PaperMorrow-Windows-Setup.exe) | Built on a GitHub Windows runner; final validation on a physical Windows device is still required |
-| Windows 10/11 x64 | [Portable ZIP](../../releases/download/v0.5.0/PaperMorrow-Windows-Portable.zip) | Extract and run without a system-wide installation |
+| macOS 12+ | [DMG](../../releases/download/v0.5.1/PaperMorrow-macOS.dmg) | Apple silicon; Apple notarization is not complete |
+| Windows 10/11 x64 | [Installer](../../releases/download/v0.5.1/PaperMorrow-Windows-Setup.exe) | Standard installer |
+| Windows 10/11 x64 | [Portable ZIP](../../releases/download/v0.5.1/PaperMorrow-Windows-Portable.zip) | Extract and run |
 
 Unsigned Beta builds may trigger macOS Gatekeeper or Windows SmartScreen. Download only from this repository's Releases page.
 
@@ -94,19 +98,10 @@ Python 3.10+ and Node.js 20+ are required.
 
 ```bash
 cp .env.example .env
-./start.sh
+./scripts/start.sh
 ```
 
-On Windows, run `start.bat`. See [DESKTOP_BUILD.md](DESKTOP_BUILD.md) for development, testing, and packaging details.
-
-## Release and verification status
-
-Every `v*` tag triggers GitHub Actions on native macOS and Windows runners. The workflow installs dependencies, runs backend tests, performs a production frontend build, packages the apps, and publishes all three assets to GitHub Releases.
-
-- The local macOS build has passed startup, health, and browser UI checks. It is ad-hoc signed and not notarized.
-- Windows packages are built on a native Windows runner and remain Beta until the user completes a final check on a real Windows 10/11 device.
-- Network behavior is mocked in tests; tests do not read real user notes or call real model services.
-- AI, Skill, and document outputs still require source, formatting, and academic verification.
+On Windows, run `scripts/start.bat`. See the [desktop build guide](docs/DESKTOP_BUILD.md) for development, testing, and packaging details.
 
 ## Technology
 
@@ -116,4 +111,4 @@ Every `v*` tag triggers GitHub Actions on native macOS and Windows runners. The 
 - Local Tool Registry, permission/approval boundaries, and audit logs
 - Incremental SQLite migrations with pre-migration backups
 
-Reproducible bug reports are welcome through GitHub Issues. Never attach API keys, unpublished papers, real patient data, or other sensitive information.
+If you try PaperMorrow, I would love to hear what feels awkward, what breaks, and what you genuinely want a research tool to do. Please never attach API keys, unpublished papers, real patient data, or other sensitive information to an issue.
