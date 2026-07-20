@@ -51,7 +51,7 @@ if (-not $Iscc) {
 if (-not $Iscc) {
   throw "未找到 Inno Setup 6。请从 https://jrsoftware.org/isdl.php 安装后重试。"
 }
-& $Iscc "/DAppVersion=0.5.2" (Join-Path $Root "desktop\installer\PaperMorrow.iss")
+& $Iscc "/DAppVersion=0.5.3" (Join-Path $Root "desktop\installer\PaperMorrow.iss")
 
 Write-Host "安装器: $Root\desktop_dist\PaperMorrow-Windows-Setup.exe"
 Write-Host "便携版: $PortableZip"

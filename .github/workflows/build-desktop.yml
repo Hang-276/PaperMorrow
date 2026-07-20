@@ -20,11 +20,11 @@ jobs:
             artifact: PaperMorrow-Windows
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: npm
@@ -63,10 +63,18 @@ jobs:
         shell: bash
         run: |
           codesign --force --deep --sign - desktop_dist/PaperMorrow.app
+          rm -rf desktop_build/dmg
           mkdir -p desktop_build/dmg
           cp -R desktop_dist/PaperMorrow.app desktop_build/dmg/PaperMorrow.app
           ln -s /Applications desktop_build/dmg/Applications
-          hdiutil create -volname PaperMorrow -srcfolder desktop_build/dmg -ov -format UDZO desktop_dist/PaperMorrow-macOS.dmg
+          for attempt in 1 2 3; do
+            if hdiutil create -volname PaperMorrow -srcfolder desktop_build/dmg -ov -format UDZO desktop_dist/PaperMorrow-macOS.dmg; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            hdiutil detach /Volumes/PaperMorrow -force >/dev/null 2>&1 || true
+            sleep 5
+          done
       - name: Create Windows installer and portable archive
         if: runner.os == 'Windows'
         shell: pwsh
