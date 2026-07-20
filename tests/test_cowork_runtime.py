@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.cowork_files import FileAccessDenied, read_authorized_text, resolve_authorized_path
 from backend.app.cowork_models import CoworkSession, CoworkStep, CoworkTask
-from backend.app.cowork_runtime import cancel_session, create_session, resume_session, run_next_step
+from backend.app.cowork_runtime import cancel_session, create_session, repair_interrupted_sessions, resume_session, run_next_step
 from backend.app.cowork_security import create_grant
 from backend.app.database import Base
 
@@ -42,6 +42,7 @@ def test_restart_can_resume_from_persisted_checkpoint(tmp_path: Path):
         item = create_session(db, "比较两篇论文")
         db.commit(); session_id = item.id
         asyncio.run(run_next_step(db, item)); db.commit()
+        assert item.status == "planned"
     engine.dispose()
     with Session(_engine(database)) as db:
         item = db.get(CoworkSession, session_id)
@@ -75,3 +76,14 @@ def test_write_requires_explicit_write_grant(tmp_path: Path):
         db.add(CoworkSession(id="s1", title="files")); db.flush()
         create_grant(db, "s1", "folder", str(root), can_read=True, can_write=False); db.flush()
         with pytest.raises(FileAccessDenied): resolve_authorized_path(db, "s1", str(root / "draft.md"), write=True)
+
+
+def test_interrupted_running_session_recovers_as_paused():
+    engine = _engine()
+    with Session(engine) as db:
+        item = create_session(db, "recover me")
+        task = db.scalar(select(CoworkTask).where(CoworkTask.session_id == item.id))
+        step = db.scalar(select(CoworkStep).where(CoworkStep.task_id == task.id).order_by(CoworkStep.position))
+        item.status = task.status = step.status = "running"; db.commit()
+        assert repair_interrupted_sessions(db) == 1
+        assert item.status == "paused" and step.status == "paused"

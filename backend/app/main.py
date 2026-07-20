@@ -21,6 +21,7 @@ from .domain_pack_service import seed_domain_packs
 from .library_service import ensure_library_membership_migration
 from .scheduler import start_scheduler, stop_scheduler
 from .cowork_skills import seed_builtin_skills
+from .cowork_runtime import repair_interrupted_sessions
 
 
 @asynccontextmanager
@@ -33,6 +34,7 @@ async def lifespan(app: FastAPI):
         ensure_library_membership_migration(db)
         repair_incomplete_wikis(db)
         seed_builtin_skills(db)
+        repair_interrupted_sessions(db)
     finally:
         db.close()
     start_scheduler()
