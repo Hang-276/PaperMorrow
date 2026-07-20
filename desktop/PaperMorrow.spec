@@ -8,7 +8,7 @@ from PyInstaller.utils.hooks import collect_submodules
 
 ROOT = Path(SPECPATH).resolve().parent
 SYSTEM = platform.system()
-APP_VERSION = os.getenv("PAPERMORROW_BUILD_VERSION", "0.5.3")
+APP_VERSION = os.getenv("PAPERMORROW_BUILD_VERSION", "0.5.4")
 ICON = ROOT / "desktop" / "icons" / ("PaperMorrow.icns" if SYSTEM == "Darwin" else "PaperMorrow.ico")
 NODE = Path(shutil.which("node") or "")
 if not NODE.is_file():

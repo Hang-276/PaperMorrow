@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="README.md">简体中文</a> ·
-  <a href="../../releases/tag/v0.5.3">v0.5.3 Beta</a> ·
+  <a href="../../releases/tag/v0.5.4">v0.5.4 Beta</a> ·
   <a href="docs/DESKTOP_BUILD.md">Build guide</a>
 </p>
 
@@ -25,9 +25,9 @@ Installers are hosted directly on GitHub Releases—no external file hosting is 
 
 | Platform | Download | Notes |
 |---|---|---|
-| macOS 12+ | [DMG](../../releases/download/v0.5.3/PaperMorrow-macOS.dmg) | Apple silicon; Apple notarization is not complete |
-| Windows 10/11 x64 | [Installer](../../releases/download/v0.5.3/PaperMorrow-Windows-Setup.exe) | Standard installer |
-| Windows 10/11 x64 | [Portable ZIP](../../releases/download/v0.5.3/PaperMorrow-Windows-Portable.zip) | Extract and run |
+| macOS 12+ | [DMG](../../releases/download/v0.5.4/PaperMorrow-macOS.dmg) | Apple silicon; Apple notarization is not complete |
+| Windows 10/11 x64 | [Installer](../../releases/download/v0.5.4/PaperMorrow-Windows-Setup.exe) | Standard installer |
+| Windows 10/11 x64 | [Portable ZIP](../../releases/download/v0.5.4/PaperMorrow-Windows-Portable.zip) | Extract and run |
 
 Unsigned Beta builds may trigger macOS Gatekeeper or Windows SmartScreen. Download only from this repository's Releases page.
 

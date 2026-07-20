@@ -1,6 +1,6 @@
 #define AppName "PaperMorrow"
 #ifndef AppVersion
-  #define AppVersion "0.5.3"
+  #define AppVersion "0.5.4"
 #endif
 #define AppPublisher "PaperMorrow"
 #define AppExeName "PaperMorrow.exe"
@@ -30,7 +30,6 @@ VersionInfoProductName={#AppName}
 VersionInfoDescription=PaperMorrow 科研工作台安装程序
 
 [Languages]
-Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]

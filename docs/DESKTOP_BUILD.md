@@ -27,7 +27,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows_app.ps1
 
 仓库自带 `Build desktop apps` 工作流。在 GitHub 的 Actions 页面手动运行后，会同时得到 macOS 与 Windows 两个临时构建产物。
 
-推送形如 `v0.5.3` 的 tag 时，工作流会先在两个系统上重新运行后端测试和前端正式构建，再把以下文件上传到 GitHub Releases，并标记为 Beta 预发布版：
+推送形如 `v0.5.4` 的 tag 时，工作流会先在两个系统上重新运行后端测试和前端正式构建，再把以下文件上传到 GitHub Releases，并标记为 Beta 预发布版：
 
 - `PaperMorrow-macOS.dmg`
 - `PaperMorrow-Windows-Setup.exe`
