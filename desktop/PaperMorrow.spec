@@ -8,7 +8,7 @@ from PyInstaller.utils.hooks import collect_submodules
 
 ROOT = Path(SPECPATH).resolve().parent
 SYSTEM = platform.system()
-APP_VERSION = os.getenv("PAPERMORROW_BUILD_VERSION", "0.5.0")
+APP_VERSION = os.getenv("PAPERMORROW_BUILD_VERSION", "0.5.1")
 ICON = ROOT / "desktop" / "icons" / ("PaperMorrow.icns" if SYSTEM == "Darwin" else "PaperMorrow.ico")
 NODE = Path(shutil.which("node") or "")
 if not NODE.is_file():
@@ -27,7 +27,7 @@ hiddenimports = (
 )
 
 a = Analysis(
-    [str(ROOT / "desktop_app.py")],
+    [str(ROOT / "desktop" / "app.py")],
     pathex=[str(ROOT)],
     binaries=[(str(NODE), "runtime")],
     datas=[

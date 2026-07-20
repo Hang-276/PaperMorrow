@@ -8,12 +8,16 @@
 
 <p align="center">
   <a href="README_EN.md">English</a> ·
-  <a href="../../releases/tag/v0.5.0">v0.5.0 Beta</a> ·
-  <a href="DESKTOP_BUILD.md">构建说明</a>
+  <a href="../../releases/tag/v0.5.1">v0.5.1 Beta</a> ·
+  <a href="docs/DESKTOP_BUILD.md">构建说明</a>
 </p>
 
 > [!IMPORTANT]
-> PaperMorrow 目前处于 **Beta 测试阶段**。请先备份重要科研资料；模型输出必须由研究者核验，不能替代原论文、实验记录或专业判断。
+> PaperMorrow 是我用 vibe coding 一点点做出来的个人项目，目前还在 **Beta**。它已经能承担不少真实的科研整理工作，但肯定还有粗糙和不完善的地方。使用前请备份重要资料，也请始终回到论文原文和实验记录核对 AI 输出。
+
+我读论文时一直想要一个更顺手的工作台：不只是收藏 PDF，也不只是打开一个聊天框，而是能把推荐、精读、笔记、项目、实验、DDL、PPT 和 AI 协作真正接起来。没找到完全符合自己习惯的工具，于是就边学边做了 PaperMorrow。现在把它分享出来，希望也能帮到正在做课程论文、毕业设计、硕博研究或独立探索的人。
+
+这是一个个人兴趣项目，不代表学校、实验室或公司，也没有把自己包装成“成熟商业产品”的打算。如果它恰好解决了你的问题，欢迎使用、提建议，或者一起把它慢慢打磨得更好。
 
 ## 下载桌面版
 
@@ -21,9 +25,9 @@
 
 | 平台 | 下载 | 说明 |
 |---|---|---|
-| macOS 12+ | [下载 DMG](../../releases/download/v0.5.0/PaperMorrow-macOS.dmg) | 当前本地发布包面向 Apple silicon；尚未完成 Apple 公证 |
-| Windows 10/11 x64 | [下载安装版](../../releases/download/v0.5.0/PaperMorrow-Windows-Setup.exe) | 由 GitHub Windows runner 构建；发布前仍需真实 Windows 设备终检 |
-| Windows 10/11 x64 | [下载便携版](../../releases/download/v0.5.0/PaperMorrow-Windows-Portable.zip) | 解压后运行，不写入系统级目录 |
+| macOS 12+ | [下载 DMG](../../releases/download/v0.5.1/PaperMorrow-macOS.dmg) | Apple silicon；尚未完成 Apple 公证 |
+| Windows 10/11 x64 | [下载安装版](../../releases/download/v0.5.1/PaperMorrow-Windows-Setup.exe) | 常规安装版 |
+| Windows 10/11 x64 | [下载便携版](../../releases/download/v0.5.1/PaperMorrow-Windows-Portable.zip) | 解压后直接运行 |
 
 未签名的 Beta 安装包可能触发 macOS Gatekeeper 或 Windows SmartScreen。发布页同时提供文件哈希；请只从本仓库 Releases 下载。
 
@@ -93,19 +97,10 @@ PaperMorrow 使用 SQLite、FTS5 与 BM25 完成本地检索，不要求独立�
 
 ```bash
 cp .env.example .env
-./start.sh
+./scripts/start.sh
 ```
 
-Windows 可双击 `start.bat`。开发、测试和桌面构建细节见 [DESKTOP_BUILD.md](DESKTOP_BUILD.md)。
-
-## 发布与验证状态
-
-每个 `v*` 标签会触发 GitHub Actions：在 macOS 与 Windows 上安装依赖、运行后端测试、执行前端正式构建、生成安装包，再将三个文件上传到 GitHub Releases。当前边界如下：
-
-- macOS 本地包已进行启动、健康检查和浏览器界面验证；使用临时签名，尚未公证。
-- Windows 安装包由原生 Windows runner 构建；在真实 Windows 设备终检完成前保持 Beta 标记。
-- 网络测试使用 mock，不在测试中读取真实用户笔记或调用真实模型服务。
-- AI、Skill 与文档生成结果仍需要用户核查来源、格式和学术准确性。
+Windows 可双击 `scripts/start.bat`。开发、测试和桌面构建细节见 [桌面构建说明](docs/DESKTOP_BUILD.md)。
 
 ## 技术结构
 
@@ -115,4 +110,4 @@ Windows 可双击 `start.bat`。开发、测试和桌面构建细节见 [DESKTOP
 - 本地 Tool Registry、权限/审批和审计日志
 - 增量 SQLite 迁移与迁移前备份
 
-欢迎通过 Issues 报告可复现问题。请勿上传 API Key、未公开论文、真实患者资料或其他敏感数据。
+如果你愿意试用，欢迎通过 Issues 告诉我哪里难用、哪里出错，以及你真正希望科研工具帮你完成什么。提交问题时请不要附带 API Key、未公开论文、真实患者资料或其他敏感数据。

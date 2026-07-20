@@ -16,8 +16,7 @@ Require-Command "node" "请安装 Node.js 20 LTS。"
 if (-not (Test-Path $Venv)) { py -3.11 -m venv $Venv }
 $Python = Join-Path $Venv "Scripts\python.exe"
 & $Python -m pip install --upgrade pip
-& $Python -m pip install -e $Root
-& $Python -m pip install -r (Join-Path $Root "requirements-desktop.txt")
+& $Python -m pip install -e "$Root[desktop]"
 
 Push-Location (Join-Path $Root "frontend")
 npm ci
@@ -52,7 +51,7 @@ if (-not $Iscc) {
 if (-not $Iscc) {
   throw "未找到 Inno Setup 6。请从 https://jrsoftware.org/isdl.php 安装后重试。"
 }
-& $Iscc "/DAppVersion=0.5.0" (Join-Path $Root "desktop\installer\PaperMorrow.iss")
+& $Iscc "/DAppVersion=0.5.1" (Join-Path $Root "desktop\installer\PaperMorrow.iss")
 
 Write-Host "安装器: $Root\desktop_dist\PaperMorrow-Windows-Setup.exe"
 Write-Host "便携版: $PortableZip"

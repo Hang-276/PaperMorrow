@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import launcher
+from scripts import launcher
 
 
 def test_existing_papermorrow_is_reused(monkeypatch):
