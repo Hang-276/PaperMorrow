@@ -3,7 +3,7 @@ from typing import Callable
 
 from gitignore_parser import parse_gitignore, parse_gitignore_str
 
-type IgnoreRule = Callable[[str], bool]
+IgnoreRule = Callable[[str], bool]
 
 GLOBAL_GITIGNORE = """
 # Ignore git files
