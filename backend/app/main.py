@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="PaperMorrow API",
-    version="0.4.4",
+    version="0.5.0",
     description="AI 论文推荐、学习笔记与 DeepWiki 代码解析",
     lifespan=lifespan,
 )
