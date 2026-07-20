@@ -8,6 +8,20 @@ import time
 from pathlib import Path
 
 
+class DesktopBridge:
+    """Minimal native picker bridge; it never reads selected content itself."""
+
+    def choose_folder(self) -> str:
+        import webview
+        result = webview.windows[0].create_file_dialog(webview.FileDialog.FOLDER)
+        return str(result[0]) if result else ""
+
+    def choose_files(self) -> list[str]:
+        import webview
+        result = webview.windows[0].create_file_dialog(webview.FileDialog.OPEN, allow_multiple=True)
+        return [str(item) for item in (result or [])]
+
+
 def user_data_dir() -> Path:
     system = platform.system()
     if system == "Darwin":
@@ -66,6 +80,7 @@ def main() -> None:
         min_size=(1050, 680),
         background_color="#101412",
         text_select=True,
+        js_api=DesktopBridge(),
     )
     try:
         webview.start(debug=False, private_mode=False)

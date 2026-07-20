@@ -17,6 +17,7 @@
 .global-assistant.fullscreen .global-assistant-thread{max-width:900px;width:100%;margin:0 auto}
 .global-assistant.fullscreen .global-assistant-compose{padding-inline:max(11px,calc((100vw - 900px)/2))}
 .assistant-compose-options{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.assistant-attachment{display:flex;align-items:center;gap:4px;color:var(--green);cursor:pointer;font-size:.5rem}.assistant-attachment svg{width:12px}.assistant-attachment input{display:none}
 .assistant-compose-options select{border:0;border-radius:8px;background:color-mix(in srgb,var(--ink) 6%,transparent);color:var(--ink);padding:5px 7px;font-size:.52rem}
 .assistant-compose-options small{padding:0!important}
 @media(max-width:600px){.global-assistant:not(.fullscreen){inset:8px!important;width:calc(100vw - 16px)!important;height:calc(100vh - 16px)!important}.assistant-drag-handle{display:none}}

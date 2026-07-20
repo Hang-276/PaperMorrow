@@ -15,6 +15,20 @@ from .llm import LLMClient, LLMNotConfigured
 TERMINAL_STATUSES = {"completed", "cancelled", "failed"}
 
 
+def repair_interrupted_sessions(db: Session) -> int:
+    """Turn process-interrupted work into explicit resumable checkpoints."""
+    sessions = db.scalars(select(CoworkSession).where(CoworkSession.status == "running")).all()
+    for session in sessions:
+        session.status = "paused"
+        for step in db.scalars(select(CoworkStep).join(CoworkTask).where(CoworkTask.session_id == session.id, CoworkStep.status == "running")).all():
+            step.status = "paused"
+            step.result_summary = step.result_summary or "应用退出时此步骤尚未完成，已从检查点安全暂停。"
+        write_audit(db, "session.recovered", "应用重启后将未完成任务恢复为暂停状态", session_id=session.id)
+    if sessions:
+        db.commit()
+    return len(sessions)
+
+
 def create_session(db: Session, goal: str, *, title: str = "", response_detail: str = "rich", thinking_effort: str = "medium") -> CoworkSession:
     goal = goal.strip()
     session = CoworkSession(
@@ -92,6 +106,8 @@ async def run_next_step(db: Session, session: CoworkSession) -> CoworkStep | Non
     next_step = db.scalar(select(CoworkStep).where(CoworkStep.task_id == task.id, CoworkStep.status == "pending"))
     if not next_step:
         task.status = session.status = "completed"
+    else:
+        task.status = session.status = "planned"
     return step
 
 
