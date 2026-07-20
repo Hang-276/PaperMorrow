@@ -20,6 +20,7 @@ from .deepwiki_service import repair_incomplete_wikis
 from .domain_pack_service import seed_domain_packs
 from .library_service import ensure_library_membership_migration
 from .scheduler import start_scheduler, stop_scheduler
+from .cowork_skills import seed_builtin_skills
 
 
 @asynccontextmanager
@@ -31,6 +32,7 @@ async def lifespan(app: FastAPI):
         seed_domain_packs(db)
         ensure_library_membership_migration(db)
         repair_incomplete_wikis(db)
+        seed_builtin_skills(db)
     finally:
         db.close()
     start_scheduler()
