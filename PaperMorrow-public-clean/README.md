@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="README_EN.md">English</a> ·
-  <a href="../../releases/latest">最新版本</a> ·
+  <a href="../../releases/tag/v0.5.0">v0.5.0 Beta</a> ·
   <a href="DESKTOP_BUILD.md">构建说明</a>
 </p>
 
@@ -21,9 +21,9 @@
 
 | 平台 | 下载 | 说明 |
 |---|---|---|
-| macOS 12+ | [下载 DMG](../../releases/latest/download/PaperMorrow-macOS.dmg) | 当前本地发布包面向 Apple silicon；尚未完成 Apple 公证 |
-| Windows 10/11 x64 | [下载安装版](../../releases/latest/download/PaperMorrow-Windows-Setup.exe) | 由 GitHub Windows runner 构建；发布前仍需真实 Windows 设备终检 |
-| Windows 10/11 x64 | [下载便携版](../../releases/latest/download/PaperMorrow-Windows-Portable.zip) | 解压后运行，不写入系统级目录 |
+| macOS 12+ | [下载 DMG](../../releases/download/v0.5.0/PaperMorrow-macOS.dmg) | 当前本地发布包面向 Apple silicon；尚未完成 Apple 公证 |
+| Windows 10/11 x64 | [下载安装版](../../releases/download/v0.5.0/PaperMorrow-Windows-Setup.exe) | 由 GitHub Windows runner 构建；发布前仍需真实 Windows 设备终检 |
+| Windows 10/11 x64 | [下载便携版](../../releases/download/v0.5.0/PaperMorrow-Windows-Portable.zip) | 解压后运行，不写入系统级目录 |
 
 未签名的 Beta 安装包可能触发 macOS Gatekeeper 或 Windows SmartScreen。发布页同时提供文件哈希；请只从本仓库 Releases 下载。
 
