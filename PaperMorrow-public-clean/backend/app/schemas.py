@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
@@ -364,7 +365,9 @@ class SettingsUpdate(BaseModel):
     font_size: int | None = Field(default=None, ge=13, le=20)
     daily_enabled: bool | None = None
     daily_time: str | None = None
-    timezone: Literal["Asia/Shanghai", "America/New_York", "America/Los_Angeles"] | None = None
+    timezone: str | None = Field(default=None, min_length=1, max_length=80)
+    timezone_auto: bool | None = None
+    daylight_saving_enabled: bool | None = None
     daily_count: int | None = Field(default=None, ge=1, le=30)
     daily_tag_ids: list[int] | None = None
     daily_profile_ids: list[int] | None = None
@@ -396,6 +399,17 @@ class SettingsUpdate(BaseModel):
             raise ValueError("时间格式必须为 HH:MM") from exc
         if not 0 <= hour <= 23 or not 0 <= minute <= 59:
             raise ValueError("无效时间")
+        return value
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("请选择有效的 IANA 时区") from exc
         return value
 
 
@@ -449,6 +463,7 @@ class WorkspaceChatRequest(BaseModel):
     context: str = Field(default="", max_length=60_000)
     message: str = Field(min_length=1, max_length=20_000)
     history: list[WorkspaceChatMessage] = Field(default_factory=list, max_length=20)
+    response_detail: Literal["concise", "rich"] = "rich"
 
 
 class PaperChatResponse(BaseModel):

@@ -1,6 +1,6 @@
 [project]
 name = "papermorrow"
-version = "0.4.3"
+version = "0.4.4"
 description = "AI paper recommendation, learning notes, and DeepWiki code analysis"
 readme = "README.md"
 requires-python = ">=3.10"

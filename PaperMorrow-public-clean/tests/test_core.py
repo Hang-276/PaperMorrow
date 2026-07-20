@@ -1130,10 +1130,11 @@ def test_workspace_assistant_receives_current_page_context(monkeypatch):
         def __init__(self, db):
             self.db = db
 
-        async def chat_about_workspace(self, page_title, context, messages):
+        async def chat_about_workspace(self, page_title, context, messages, response_detail="rich"):
             assert page_title == "研究项目"
             assert "只属于当前项目的实验结论" in context
             assert messages[-1] == {"role": "user", "content": "下一步应该验证什么？"}
+            assert response_detail == "rich"
             return "建议先复现实验二，并把结果写入项目记录。"
 
     monkeypatch.setattr("backend.app.api.LLMClient", FixtureWorkspaceLLM)
