@@ -28,13 +28,13 @@ from .reader_service import cached_pdf_path, reader_figure_path, save_reader_fig
 from .schemas import ChatSessionCreate, DomainPackCreate, DomainPackUpdate, DomainSearchPreviewRequest, DomainSourceTestRequest, ExperimentAnalysisRequest, ExperimentArtifactsAppend, ExperimentCreate, ExperimentMetricsAppend, ExperimentUpdate, GenerateRequest, KnowledgeEdgeCreate, KnowledgeNodeCreate, LibraryFolderCreate, LibraryImportRequest, LibraryPaperFoldersRequest, LibraryPaperTagsRequest, LibraryScanRequest, LibraryTagCreate, LibraryTagUpdate, LLMProfileCreate, LLMProfileUpdate, NoteRequest, PaperChatRequest, PaperEvidenceUpdate, PaperResourceCreate, PaperVersionLinkRequest, ReaderFigureRequest, ReaderTranslateRequest, RepositoryBindRequest, ResearchProfileCreate, ResearchProfileUpdate, ResearchProjectChatRequest, ResearchProjectCreate, ResearchProjectNoteCreate, ResearchProjectPaperRequest, ResearchProjectPaperUpdate, ResearchProjectSearchRequest, ResearchProjectUpdate, ResearchStudyCreate, SettingsUpdate, StudyStateRequest, WorkspaceChatRequest
 from .serializers import batch_dict, job_dict, library_tag_dict, paper_dict, research_profile_dict, tag_dict
 from .settings_service import delete_llm_profile_key, get_active_llm_profile, get_settings, list_llm_profiles, llm_profile_dict, save_llm_profile_key, save_secrets, update_settings
-from .usage_service import token_usage_stats
+from .usage_service import recent_token_calls, token_usage_stats
 from .database import get_db
 from .zotero_service import ZoteroError, ZoteroService
 from .research_service import ResearchService, research_study_dict
 from .project_service import PAPER_ROLES, READING_STATUSES, add_project_paper, load_project, project_dict, reindex_project, save_chat, search_project
 from .evidence_service import evidence_dict, link_versions, replace_analysis_evidence, split_version, undo_last_version_action, work_timeline
-from .knowledge_graph_service import add_resource, check_dict, create_grounded_edge, generate_reproduction_checklist, resource_dict, unified_graph, upsert_node
+from .knowledge_graph_service import add_resource, check_dict, create_grounded_edge, generate_reproduction_checklist, project_knowledge_graph, resource_dict, unified_graph, upsert_node
 from .experiment_service import analyze_experiments, append_artifacts, append_metrics, artifact_dict, create_experiment, experiment_dict, experiment_summary, list_experiments, load_experiment, metric_dict, update_experiment
 from .note_service import sync_reader_note
 
@@ -453,6 +453,14 @@ def read_project(project_id: int, db: Session = Depends(get_db)) -> dict[str, An
     if not project:
         raise HTTPException(status_code=404, detail="研究项目不存在")
     return project_dict(project)
+
+
+@router.get("/projects/{project_id}/knowledge-graph")
+def read_project_knowledge_graph(project_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    project = load_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="研究项目不存在")
+    return project_knowledge_graph(db, project)
 
 
 @router.put("/projects/{project_id}")
@@ -1049,6 +1057,12 @@ def delete_llm_profile(profile_id: str, db: Session = Depends(get_db)) -> dict[s
 def read_token_usage(days: int = Query(default=14, ge=1, le=90), db: Session = Depends(get_db)) -> dict[str, Any]:
     settings = get_settings(db)
     return token_usage_stats(db, settings.get("timezone", "Asia/Shanghai"), days)
+
+
+@router.get("/llm/calls")
+def read_llm_calls(limit: int = Query(default=100, ge=1, le=500), db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    settings = get_settings(db)
+    return recent_token_calls(db, settings.get("timezone", "Asia/Shanghai"), limit)
 
 
 @router.post("/papers/{paper_id}/chat/sessions")

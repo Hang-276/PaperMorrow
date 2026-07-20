@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .deepwiki_service import wiki_is_complete, wiki_is_full_deepwiki
-from .models import DeepWikiJob, KnowledgeEdge, KnowledgeNode, Paper, PaperResource, ReproductionCheck
+from .models import DeepWikiJob, KnowledgeEdge, KnowledgeNode, Paper, PaperResource, ReproductionCheck, ResearchProject
 
 
 NODE_TYPES = {"paper", "method", "task", "dataset", "benchmark", "model", "experiment_conclusion", "limitation", "repository", "weight", "project"}
@@ -51,6 +51,78 @@ def unified_graph(db: Session, base: dict[str, Any] | None = None) -> dict[str, 
                               "type": edge.relation_type, "source_type": edge.source_type, "source_id": edge.source_id,
                               "evidence": edge.evidence, "confidence": edge.confidence, "confirmed": edge.confirmed})
     return data
+
+
+def project_knowledge_graph(db: Session, project: ResearchProject) -> dict[str, Any]:
+    """Build a graph strictly from objects already linked to one research project."""
+    project_id = f"project:{project.id}"
+    nodes: list[dict[str, Any]] = [{
+        "id": project_id, "type": "project", "label": project.title,
+        "metadata": {"project_id": project.id, "research_question": project.research_question},
+    }]
+    edges: list[dict[str, Any]] = []
+    paper_ids: set[int] = set()
+
+    for link in project.papers:
+        paper_ids.add(link.paper_id)
+        node_id = f"paper:{link.paper_id}"
+        nodes.append({
+            "id": node_id, "type": "paper", "label": link.paper.title_zh or link.paper.title_en,
+            "paper_id": link.paper_id,
+            "metadata": {"project_id": project.id, "role": link.role, "reading_status": link.reading_status},
+        })
+        edges.append({
+            "source": project_id, "target": node_id, "type": "uses",
+            "source_type": "project_paper", "source_id": str(link.id),
+            "evidence": f"论文由用户关联到项目，角色为 {link.role}。", "confidence": 1.0, "confirmed": True,
+        })
+
+    for note in project.notes:
+        node_id = f"project-note:{note.id}"
+        nodes.append({"id": node_id, "type": "note", "label": note.title, "metadata": {"project_id": project.id}})
+        edges.append({
+            "source": node_id, "target": project_id, "type": "supports",
+            "source_type": "project_note", "source_id": str(note.id),
+            "evidence": "该笔记由用户创建在当前项目中。", "confidence": 1.0, "confirmed": True,
+        })
+
+    for link in project.studies:
+        node_id = f"study:{link.study_id}"
+        nodes.append({"id": node_id, "type": "study", "label": link.study.title, "metadata": {"project_id": project.id}})
+        edges.append({
+            "source": node_id, "target": project_id, "type": "supports",
+            "source_type": "project_study", "source_id": str(link.id),
+            "evidence": "该专题调研由用户关联到当前项目。", "confidence": 1.0, "confirmed": True,
+        })
+
+    for experiment in project.experiments:
+        node_id = f"experiment:{experiment.id}"
+        nodes.append({
+            "id": node_id, "type": "experiment", "label": experiment.title,
+            "metadata": {"project_id": project.id, "status": experiment.status},
+        })
+        edges.append({
+            "source": node_id, "target": project_id, "type": "supports",
+            "source_type": "project_experiment", "source_id": str(experiment.id),
+            "evidence": "该实验记录属于当前项目；关系不代表实验结论已得到验证。", "confidence": 1.0, "confirmed": True,
+        })
+
+    entity_ids: set[int] = set()
+    for entity in db.scalars(select(KnowledgeNode).order_by(KnowledgeNode.id)).all():
+        metadata = json.loads(entity.metadata_json or "{}")
+        belongs = metadata.get("project_id") == project.id or metadata.get("paper_id") in paper_ids
+        if not belongs:
+            continue
+        entity_ids.add(entity.id)
+        nodes.append({"id": f"entity:{entity.id}", "type": entity.node_type, "label": entity.label, "metadata": metadata})
+    for edge in db.scalars(select(KnowledgeEdge).order_by(KnowledgeEdge.id)).all():
+        if edge.source_node_id in entity_ids and edge.target_node_id in entity_ids:
+            edges.append({
+                "id": edge.id, "source": f"entity:{edge.source_node_id}", "target": f"entity:{edge.target_node_id}",
+                "type": edge.relation_type, "source_type": edge.source_type, "source_id": edge.source_id,
+                "evidence": edge.evidence, "confidence": edge.confidence, "confirmed": edge.confirmed,
+            })
+    return {"scope": {"type": "project", "id": project.id, "title": project.title}, "nodes": nodes, "edges": edges}
 
 
 def add_resource(db: Session, paper: Paper, resource_type: str, url: str, label: str, source: str, verified: bool) -> PaperResource:

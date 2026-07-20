@@ -224,6 +224,24 @@ def test_token_usage_rollup_keeps_estimated_flag():
         db.delete(row); db.commit(); db.close()
 
 
+def test_llm_call_log_exposes_metadata_without_sensitive_content():
+    db = SessionLocal()
+    row = TokenUsage(
+        profile_id="call-log-test", profile_name="Safe Profile", provider="custom", model="safe-model",
+        purpose="workspace_chat", prompt_tokens=8, completion_tokens=5, total_tokens=13, estimated=False,
+    )
+    db.add(row); db.commit()
+    try:
+        with TestClient(app) as client:
+            response = client.get("/api/llm/calls?limit=10")
+            assert response.status_code == 200
+            item = next(value for value in response.json() if value["id"] == row.id)
+            assert item["total_tokens"] == 13 and item["purpose_label"] == "全局助手"
+            assert not ({"prompt", "response", "content", "api_key"} & set(item))
+    finally:
+        db.delete(row); db.commit(); db.close()
+
+
 def test_api_defaults_and_chat_contract():
     with TestClient(app) as client:
         health = client.get("/api/system/health")

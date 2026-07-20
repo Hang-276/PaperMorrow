@@ -78,6 +78,14 @@ def test_experiment_api_summary_timeline_and_no_llm_fallback():
         assert len(payload["timeline"]) == 2
         assert payload["metric_series"]["accuracy:test"][1]["delta_previous"] == -0.07
 
+        other = client.post("/api/projects", json={"title": "隔离项目"}).json()
+        graph = client.get(f"/api/projects/{project_id}/knowledge-graph")
+        assert graph.status_code == 200
+        graph_payload = graph.json()
+        assert graph_payload["scope"] == {"type": "project", "id": project_id, "title": "实验 fixture 项目"}
+        assert {node["id"] for node in graph_payload["nodes"]} >= {f"project:{project_id}", f"experiment:{baseline_id}"}
+        assert f"project:{other['id']}" not in {node["id"] for node in graph_payload["nodes"]}
+
         analysis = client.post(
             f"/api/projects/{project_id}/experiments/analyze",
             json={"question": "准确率发生了什么变化？"},

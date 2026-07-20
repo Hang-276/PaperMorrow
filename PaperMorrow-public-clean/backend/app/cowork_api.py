@@ -16,7 +16,7 @@ from .cowork_tools import DEFAULT_REGISTRY
 from .database import get_db
 from .settings_service import get_active_llm_profile
 from .llm import LLMNotConfigured
-from .cowork_skills import skill_dict
+from .cowork_skills import import_skill, skill_dict, validate_imported_skill
 
 
 router = APIRouter(prefix="/api/cowork", tags=["cowork"])
@@ -77,6 +77,16 @@ class TeamAssemble(StrictPayload):
     token_budget_each: int | None = Field(default=None, ge=1000, le=50_000)
 
 
+class SkillImport(StrictPayload):
+    name: str = Field(min_length=1, max_length=160)
+    description: str = Field(min_length=1, max_length=2000)
+    version: str = Field(min_length=1, max_length=40)
+    allowed_tools: list[str] = Field(default_factory=list, max_length=20)
+    source: str = Field(min_length=1, max_length=1000)
+    license: str = Field(min_length=1, max_length=120)
+    instructions: str = Field(min_length=1, max_length=20_000)
+
+
 def _session(db: Session, session_id: str) -> CoworkSession:
     item = db.get(CoworkSession, session_id)
     if not item:
@@ -125,6 +135,34 @@ def capabilities(db: Session = Depends(get_db)) -> dict:
 @router.get("/skills")
 def list_skills(db: Session = Depends(get_db)) -> list[dict]:
     return [skill_dict(item) for item in db.scalars(select(SkillManifest).where(SkillManifest.enabled.is_(True)).order_by(SkillManifest.name)).all()]
+
+
+def _available_tool_names() -> set[str]:
+    return {item["name"] for item in DEFAULT_REGISTRY.list_tools()}
+
+
+@router.post("/skills/preview")
+def preview_skill(payload: SkillImport) -> dict:
+    try:
+        values = validate_imported_skill(payload.model_dump(), _available_tool_names())
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {
+        **{key: value for key, value in values.items() if key != "instructions"},
+        "instruction_characters": len(values["instructions"]),
+        "security": {"shell": False, "network": False, "unscoped_files": False},
+    }
+
+
+@router.post("/skills/import", status_code=201)
+def create_skill(payload: SkillImport, db: Session = Depends(get_db)) -> dict:
+    try:
+        item = import_skill(db, payload.model_dump(), _available_tool_names())
+        db.commit(); db.refresh(item)
+    except (OSError, ValueError) as exc:
+        db.rollback()
+        raise HTTPException(422, str(exc)) from exc
+    return skill_dict(item)
 
 
 @router.get("/expert-roles")
