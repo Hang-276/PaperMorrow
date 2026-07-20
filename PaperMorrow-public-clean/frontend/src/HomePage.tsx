@@ -23,7 +23,7 @@ export default function HomePage({ tasks, deadlines, today, settings, onNavigate
   const addTask=async()=>{if(!taskTitle.trim())return;setBusy(true);try{await api('/api/planner/tasks',{method:'POST',body:JSON.stringify({title:taskTitle.trim(),priority:'medium'})});setTaskTitle('');await onPlannerChanged()}finally{setBusy(false)}}
   const complete=async(item:PlannerTask)=>{await api(`/api/planner/tasks/${item.id}`,{method:'PUT',body:JSON.stringify({status:'completed'})});await onPlannerChanged()}
   return <section className="home-page page-content">
-    <div className="home-welcome"><div><span>RESEARCH START</span><h2>今天从哪里开始？</h2><p>把阅读、研究计划和重要截稿日期集中在一个清晰的工作台。</p></div><button onClick={onOpenAssistant}><Sparkles/>询问研究助手</button></div>
+    <div className="home-welcome"><div><span>RESEARCH START</span><h2>今天从哪里开始？</h2><p>选择一项工作，继续阅读、记录想法或推进正在进行的研究。</p></div><button onClick={onOpenAssistant}><Sparkles/>询问研究助手</button></div>
     <div className="home-quick-grid">
       <button onClick={()=>onNavigate('today')}><i><Radar/></i><span><strong>开始推荐</strong><small>按专业与研究方向发现论文</small></span><ArrowRight/></button>
       <button onClick={onStartNote}><i><NotebookPen/></i><span><strong>开始写笔记</strong><small>记录想法或引用学习库论文</small></span><ArrowRight/></button>

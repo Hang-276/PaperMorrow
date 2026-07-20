@@ -133,7 +133,7 @@ export default function GlobalAssistant({ open, onOpen, onClose, pageId, pageTit
     </header>
     {!configured ? <div className="global-assistant-empty"><Bot/><h3>连接模型后即可开始</h3><p>助手会读取你当前可见的页面内容，回答问题，并把有价值的回复归档到笔记。</p><button onClick={onOpenSettings}><Settings/>前往模型设置</button></div> : <>
       <div className="global-assistant-thread">
-        {!messages.length && <div className="global-assistant-welcome"><MessageCircle/><h3>针对当前页面提问</h3><p>只会在你发送问题时读取当前可见内容；输入框、API Key 与隐藏页面不会被采集。</p><div>{quickQuestions.map(question => <button key={question} onClick={() => send(question)}>{question}</button>)}</div></div>}
+        {!messages.length && <div className="global-assistant-welcome"><MessageCircle/><h3>针对当前页面提问</h3><p>总结当前内容、解释重点，或把页面信息整理成可继续执行的下一步。</p><div>{quickQuestions.map(question => <button key={question} onClick={() => send(question)}>{question}</button>)}</div></div>}
         {messages.map(message => <article key={message.id} className={`global-assistant-message ${message.role}`}>
           <span>{message.role === 'assistant' ? 'AI' : '你'} · {message.pageTitle}</span>
           <div>{message.role === 'assistant' ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown> : message.content}</div>

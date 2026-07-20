@@ -53,7 +53,7 @@ export default function ResearchPage({onDataChanged}:{onDataChanged:()=>Promise<
   }
 
   return <section className="page-content research-page">
-    <div className="list-toolbar"><div><span className="section-kicker">LLM RESEARCH DESK</span><h2>专题调研</h2><p>输入真正想研究的问题，由 LLM 规划检索词、聚合学术来源并综合评估关联度与研究价值。</p></div></div>
+    <div className="list-toolbar"><div><span className="section-kicker">LLM RESEARCH DESK</span><h2>专题调研</h2><p>输入一个研究问题，获得检索路径、候选文献和带来源的综合分析。</p></div></div>
     {message&&<div className="research-message">{running||reviewing?<RefreshCw className="spin"/>:<Sparkles/>}{message}</div>}
     <div className="research-compose">
       <div className="research-compose-head"><FlaskConical/><div><strong>创建一项调研</strong><span>结果会计入已发现论文，避免之后重复推荐。</span></div></div>
