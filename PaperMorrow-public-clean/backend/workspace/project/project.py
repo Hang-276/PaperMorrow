@@ -31,6 +31,11 @@ class Project(BaseModel):
                 target = resolved
             else:
                 target = (root / str(candidate).lstrip("/\\")).resolve()
+        elif str(candidate).startswith(("/", "\\")):
+            # Windows treats `\main.py` as drive-root relative instead of
+            # absolute. Model-produced repository paths still need to resolve
+            # below the selected project root on every platform.
+            target = (root / str(candidate).lstrip("/\\")).resolve()
         else:
             target = (root / candidate).resolve()
         if target != root and root not in target.parents:

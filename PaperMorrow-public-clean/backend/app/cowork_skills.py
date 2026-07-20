@@ -94,11 +94,12 @@ def import_skill(db: Session, payload: dict, available_tools: set[str]) -> Skill
     if existing:
         raise ValueError("相同名称和版本的 Skill 已存在")
     content = values.pop("instructions")
-    checksum = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    content_bytes = content.encode("utf-8")
+    checksum = hashlib.sha256(content_bytes).hexdigest()
     folder = USER_SKILL_ROOT / checksum[:16]
     folder.mkdir(parents=True, exist_ok=False)
     entry = folder / "SKILL.md"
-    entry.write_text(content, encoding="utf-8")
+    entry.write_bytes(content_bytes)
     item = SkillManifest(
         id=str(uuid.uuid4()), entrypoint=str(entry), checksum=checksum, enabled=True,
         reviewed_at=datetime.now(timezone.utc), allowed_tools_json=json.dumps(values.pop("allowed_tools"), ensure_ascii=False),

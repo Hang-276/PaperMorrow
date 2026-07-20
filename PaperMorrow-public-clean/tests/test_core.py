@@ -569,7 +569,7 @@ def test_deepwiki_empty_llm_page_falls_back_to_real_markdown(tmp_path):
     wiki = asyncio.run(_generate_llm_wiki(EmptyPageLLM(), "https://github.com/example/demo", "context", analysis))
     assert _valid_page_content(wiki["pages"][0]["content"])
     _write_wiki(tmp_path, wiki)
-    saved = (tmp_path / "pages" / "overview.md").read_text()
+    saved = (tmp_path / "pages" / "overview.md").read_text(encoding="utf-8")
     assert "相关源码" in saved and "def run" in saved
 
 
@@ -642,6 +642,7 @@ def test_original_deepwiki_prompts_schema_and_static_guardrail(tmp_path):
     with pytest.raises(ValueError):
         project.map_path("../outside.txt")
     assert project.map_path("/main.py") == str((tmp_path / "main.py").resolve())
+    assert project.map_path("\\main.py") == str((tmp_path / "main.py").resolve())
 
 
 def test_original_deepwiki_async_agent_can_execute_tools(tmp_path):
