@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from .api import router
 from .note_api import router as note_router
 from .presentation_api import router as presentation_router
+from .planner_api import router as planner_router
 from .catalog import seed_catalog
 from .config import ROOT_DIR
 from .database import SessionLocal, init_db
@@ -38,7 +39,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="PaperMorrow API",
-    version="0.4.2",
+    version="0.4.3",
     description="AI 论文推荐、学习笔记与 DeepWiki 代码解析",
     lifespan=lifespan,
 )
@@ -52,6 +53,7 @@ app.add_middleware(
 app.include_router(router)
 app.include_router(note_router)
 app.include_router(presentation_router)
+app.include_router(planner_router)
 
 dist_dir = ROOT_DIR / "frontend" / "dist"
 if dist_dir.exists():
