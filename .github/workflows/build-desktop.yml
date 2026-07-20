@@ -1,5 +1,8 @@
 name: Build desktop apps
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
   push:
@@ -41,11 +44,20 @@ jobs:
           npm --prefix frontend run build
           npm --prefix presentation-studio run build
           python desktop/make_icons.py
+      - name: Run release checks
+        shell: bash
+        run: |
+          python -m pytest -q
+          npm --prefix frontend run build
       - name: Package application
         shell: bash
         env:
           PYINSTALLER_CONFIG_DIR: ${{ github.workspace }}/.pyinstaller-cache
-        run: python -m PyInstaller --noconfirm --clean --distpath desktop_dist --workpath desktop_build desktop/PaperMorrow.spec
+        run: |
+          if [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            export PAPERMORROW_BUILD_VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          python -m PyInstaller --noconfirm --clean --distpath desktop_dist --workpath desktop_build desktop/PaperMorrow.spec
       - name: Create macOS disk image
         if: runner.os == 'macOS'
         shell: bash
@@ -59,9 +71,12 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $Version = "0.5.0"
+          $RefName = "${{ github.ref_name }}"
+          if ($RefName -match '^v(\d+\.\d+\.\d+)$') { $Version = $Matches[1] }
           choco install innosetup --no-progress -y
           Compress-Archive -Path desktop_dist\PaperMorrow -DestinationPath desktop_dist\PaperMorrow-Windows-Portable.zip -CompressionLevel Optimal
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=0.4.4" desktop\installer\PaperMorrow.iss
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$Version" desktop\installer\PaperMorrow.iss
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
@@ -70,3 +85,24 @@ jobs:
             desktop_dist/PaperMorrow-Windows-Setup.exe
             desktop_dist/PaperMorrow-Windows-Portable.zip
           if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Publish beta release assets on GitHub
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd release-assets
+          sha256sum PaperMorrow-* > SHA256SUMS.txt
+          if ! gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            gh release create "${{ github.ref_name }}" --title "PaperMorrow ${{ github.ref_name }} Beta" --generate-notes --prerelease
+          fi
+          gh release upload "${{ github.ref_name }}" ./* --clobber
