@@ -99,6 +99,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           cd release-assets
           sha256sum PaperMorrow-* > SHA256SUMS.txt
