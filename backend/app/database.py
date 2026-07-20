@@ -29,6 +29,7 @@ def init_db() -> None:
     from . import models  # noqa: F401
     from . import note_models  # noqa: F401
     from . import presentation_models  # noqa: F401
+    from . import cowork_models  # noqa: F401
     from .migrations import run_migrations
 
     run_migrations(engine)

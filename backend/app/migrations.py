@@ -295,6 +295,34 @@ def _migration_009_planner_deadlines(connection) -> None:
         connection.execute(text(statement))
 
 
+def _migration_010_cowork_foundation(connection) -> None:
+    statements = [
+        """CREATE TABLE IF NOT EXISTS cowork_sessions (id VARCHAR(64) PRIMARY KEY, title VARCHAR(500) NOT NULL DEFAULT '新研究任务', goal TEXT NOT NULL DEFAULT '', status VARCHAR(24) NOT NULL DEFAULT 'draft', model_profile_id VARCHAR(64), model_name VARCHAR(160) NOT NULL DEFAULT '', response_detail VARCHAR(16) NOT NULL DEFAULT 'rich', thinking_effort VARCHAR(16) NOT NULL DEFAULT 'medium', context_summary TEXT NOT NULL DEFAULT '', stop_requested BOOLEAN NOT NULL DEFAULT 0, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS cowork_messages (id INTEGER PRIMARY KEY, session_id VARCHAR(64) NOT NULL REFERENCES cowork_sessions(id) ON DELETE CASCADE, role VARCHAR(16) NOT NULL, content_blocks_json TEXT NOT NULL DEFAULT '[]', sources_json TEXT NOT NULL DEFAULT '[]', attachments_json TEXT NOT NULL DEFAULT '[]', tool_calls_json TEXT NOT NULL DEFAULT '[]', approval_ref VARCHAR(64), prompt_tokens INTEGER NOT NULL DEFAULT 0, completion_tokens INTEGER NOT NULL DEFAULT 0, created_at DATETIME NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS cowork_tasks (id INTEGER PRIMARY KEY, session_id VARCHAR(64) NOT NULL REFERENCES cowork_sessions(id) ON DELETE CASCADE, title VARCHAR(500) NOT NULL, status VARCHAR(24) NOT NULL DEFAULT 'planned', result_summary TEXT NOT NULL DEFAULT '', created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS cowork_steps (id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL REFERENCES cowork_tasks(id) ON DELETE CASCADE, position INTEGER NOT NULL, title VARCHAR(500) NOT NULL, description TEXT NOT NULL DEFAULT '', depends_on_json TEXT NOT NULL DEFAULT '[]', status VARCHAR(24) NOT NULL DEFAULT 'pending', retry_count INTEGER NOT NULL DEFAULT 0, checkpoint_json TEXT NOT NULL DEFAULT '{}', result_summary TEXT NOT NULL DEFAULT '', error TEXT, started_at DATETIME, finished_at DATETIME)""",
+        """CREATE TABLE IF NOT EXISTS cowork_permission_grants (id VARCHAR(64) PRIMARY KEY, session_id VARCHAR(64) NOT NULL REFERENCES cowork_sessions(id) ON DELETE CASCADE, resource_type VARCHAR(40) NOT NULL, resource_scope TEXT NOT NULL, normalized_path TEXT, can_read BOOLEAN NOT NULL DEFAULT 0, can_write BOOLEAN NOT NULL DEFAULT 0, duration VARCHAR(16) NOT NULL DEFAULT 'session', granted_at DATETIME NOT NULL, revoked_at DATETIME)""",
+        """CREATE TABLE IF NOT EXISTS cowork_tool_calls (id VARCHAR(64) PRIMARY KEY, session_id VARCHAR(64) NOT NULL REFERENCES cowork_sessions(id) ON DELETE CASCADE, step_id INTEGER REFERENCES cowork_steps(id) ON DELETE SET NULL, tool_name VARCHAR(160) NOT NULL, arguments_summary_json TEXT NOT NULL DEFAULT '{}', risk_level VARCHAR(16) NOT NULL DEFAULT 'low', approval_status VARCHAR(24) NOT NULL DEFAULT 'not_required', status VARCHAR(24) NOT NULL DEFAULT 'pending', result_json TEXT NOT NULL DEFAULT '{}', user_summary TEXT NOT NULL DEFAULT '', error TEXT, undo_hint_json TEXT NOT NULL DEFAULT '{}', started_at DATETIME, finished_at DATETIME, created_at DATETIME NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS cowork_approvals (id VARCHAR(64) PRIMARY KEY, session_id VARCHAR(64) NOT NULL REFERENCES cowork_sessions(id) ON DELETE CASCADE, tool_call_id VARCHAR(64) NOT NULL UNIQUE REFERENCES cowork_tool_calls(id) ON DELETE CASCADE, status VARCHAR(24) NOT NULL DEFAULT 'pending', action_summary TEXT NOT NULL, impact_summary TEXT NOT NULL, reason TEXT NOT NULL, reversible BOOLEAN NOT NULL DEFAULT 0, destination TEXT NOT NULL DEFAULT '仅本机', decided_at DATETIME, created_at DATETIME NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS cowork_artifacts (id VARCHAR(64) PRIMARY KEY, session_id VARCHAR(64) NOT NULL REFERENCES cowork_sessions(id) ON DELETE CASCADE, artifact_type VARCHAR(40) NOT NULL, title VARCHAR(500) NOT NULL, local_path TEXT, object_type VARCHAR(40), object_id VARCHAR(64), sources_json TEXT NOT NULL DEFAULT '[]', metadata_json TEXT NOT NULL DEFAULT '{}', created_at DATETIME NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS cowork_skill_manifests (id VARCHAR(64) PRIMARY KEY, name VARCHAR(160) NOT NULL, description TEXT NOT NULL, version VARCHAR(40) NOT NULL, entrypoint TEXT NOT NULL, allowed_tools_json TEXT NOT NULL DEFAULT '[]', source TEXT NOT NULL DEFAULT 'builtin', license VARCHAR(120) NOT NULL DEFAULT 'PaperMorrow built-in', enabled BOOLEAN NOT NULL DEFAULT 1, checksum VARCHAR(128) NOT NULL DEFAULT '', reviewed_at DATETIME, UNIQUE(name, version))""",
+        """CREATE TABLE IF NOT EXISTS cowork_audit_logs (id INTEGER PRIMARY KEY, session_id VARCHAR(64) REFERENCES cowork_sessions(id) ON DELETE SET NULL, event_type VARCHAR(80) NOT NULL, actor VARCHAR(24) NOT NULL DEFAULT 'system', summary TEXT NOT NULL, details_json TEXT NOT NULL DEFAULT '{}', created_at DATETIME NOT NULL)""",
+    ]
+    for statement in statements:
+        connection.execute(text(statement))
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS ix_cowork_sessions_status ON cowork_sessions(status)",
+        "CREATE INDEX IF NOT EXISTS ix_cowork_messages_session ON cowork_messages(session_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_cowork_tasks_session ON cowork_tasks(session_id)",
+        "CREATE INDEX IF NOT EXISTS ix_cowork_steps_task ON cowork_steps(task_id, position)",
+        "CREATE INDEX IF NOT EXISTS ix_cowork_grants_session ON cowork_permission_grants(session_id, resource_type)",
+        "CREATE INDEX IF NOT EXISTS ix_cowork_tool_calls_session ON cowork_tool_calls(session_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_cowork_artifacts_session ON cowork_artifacts(session_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_cowork_audit_session ON cowork_audit_logs(session_id, created_at)",
+    ):
+        connection.execute(text(statement))
+
+
 MIGRATIONS = [
     ("001_domain_packs", _migration_001_domain_packs),
     ("002_research_projects", _migration_002_research_projects),
@@ -305,6 +333,7 @@ MIGRATIONS = [
     ("007_experiment_records", _migration_007_experiment_records),
     ("008_presentation_drafts", _migration_008_presentation_drafts),
     ("009_planner_deadlines", _migration_009_planner_deadlines),
+    ("010_cowork_foundation", _migration_010_cowork_foundation),
 ]
 
 
