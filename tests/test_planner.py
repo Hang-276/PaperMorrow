@@ -65,3 +65,26 @@ def test_planner_task_and_submission_deadline_crud():
 
         assert client.delete(f"/api/planner/tasks/{task_id}").status_code == 204
         assert client.delete(f"/api/planner/deadlines/{deadline_id}").status_code == 204
+
+
+def test_timezone_settings_accept_iana_and_share_deadline_timezone():
+    init_db()
+    with TestClient(app) as client:
+        response = client.put("/api/settings", json={
+            "timezone": "Europe/London", "timezone_auto": False, "daylight_saving_enabled": True,
+        })
+        assert response.status_code == 200
+        settings = response.json()
+        assert settings["timezone"] == "Europe/London"
+        assert settings["timezone_auto"] is False
+        assert settings["daylight_saving_enabled"] is True
+
+        deadline = client.post("/api/planner/deadlines", json={
+            "venue_name": "Timezone Fixture", "deadline_at": "2035-06-01T12:00:00Z",
+            "timezone_name": settings["timezone"],
+        })
+        assert deadline.status_code == 201
+        assert deadline.json()["timezone_name"] == settings["timezone"]
+        assert client.delete(f"/api/planner/deadlines/{deadline.json()['id']}").status_code == 204
+
+        assert client.put("/api/settings", json={"timezone": "Mars/Olympus"}).status_code == 422

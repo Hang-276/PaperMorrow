@@ -7,7 +7,7 @@ button { cursor:pointer; }
 .app-shell { min-height:100vh; }
 .sidebar-shell { position:fixed; inset:0 auto 0 0; width:242px; background:#101a17; color:#fff; padding:26px 18px; display:flex; flex-direction:column; z-index:20; }
 .brand { display:flex; align-items:center; gap:12px; padding:0 10px 30px; }
-.brand-mark { width:40px; height:40px; border-radius:12px; background:#e6a16d; color:#15201c; display:grid; place-items:center; }
+.brand-mark { width:40px; height:40px; padding:0; border:0; border-radius:12px; background:#e6a16d; color:#15201c; display:grid; place-items:center; }
 .brand strong,.brand span { display:block; }.brand strong{font-size:1.0625rem;letter-spacing:.2px}.brand span{color:#93a29c;font-size:0.6875rem;text-transform:uppercase;letter-spacing:1.4px;margin-top:2px}
 .sidebar-shell nav { display:flex; flex-direction:column; gap:6px; }
 .sidebar-shell nav button { border:0; background:transparent; color:#aab5b1; display:flex; align-items:center; gap:12px; width:100%; padding:12px 13px; border-radius:10px; text-align:left; transition:.2s; }

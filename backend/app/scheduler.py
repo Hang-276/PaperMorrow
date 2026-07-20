@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -19,6 +19,16 @@ from .settings_service import get_settings
 scheduler = BackgroundScheduler()
 JOB_ID = "daily-paper-recommendation"
 LIBRARY_SYNC_JOB_ID = "local-library-folder-sync"
+
+
+def configured_timezone(settings: dict):
+    """Use IANA daylight-saving rules, or a stable standard offset when disabled."""
+    zone = ZoneInfo(settings.get("timezone", "Asia/Shanghai"))
+    if settings.get("daylight_saving_enabled", True):
+        return zone
+    year = datetime.now().year
+    offsets = [datetime(year, month, 1, tzinfo=zone).utcoffset() or timedelta(0) for month in (1, 7)]
+    return timezone(min(offsets), name=f"{settings.get('timezone', 'UTC')} standard")
 
 
 def start_scheduler() -> None:
@@ -45,7 +55,7 @@ def sync_scheduler() -> None:
     if not settings.get("daily_enabled"):
         return
     hour, minute = map(int, settings["daily_time"].split(":"))
-    trigger = CronTrigger(hour=hour, minute=minute, timezone=ZoneInfo(settings["timezone"]))
+    trigger = CronTrigger(hour=hour, minute=minute, timezone=configured_timezone(settings))
     scheduler.add_job(run_daily_recommendation, trigger=trigger, id=JOB_ID, replace_existing=True, kwargs={"triggered_by": "schedule"}, max_instances=1, coalesce=True)
 
 
@@ -55,7 +65,7 @@ def run_daily_recommendation(triggered_by: str = "schedule") -> None:
         settings = get_settings(db)
         if not settings.get("daily_enabled"):
             return
-        if _already_ran_today(db, settings["timezone"]):
+        if _already_ran_today(db, settings["timezone"], settings.get("daylight_saving_enabled", True)):
             return
         for lane in daily_recommendation_lanes(db, settings):
             asyncio.run(RecommendationService(db).generate(
@@ -95,16 +105,16 @@ def _schedule_startup_catchup() -> None:
         settings = get_settings(db)
         if not settings.get("daily_enabled") or not (settings.get("daily_tag_ids") or settings.get("daily_profile_ids")):
             return
-        now = datetime.now(ZoneInfo(settings["timezone"]))
+        now = datetime.now(configured_timezone(settings))
         scheduled_hour, scheduled_minute = map(int, settings["daily_time"].split(":"))
-        if (now.hour, now.minute) >= (scheduled_hour, scheduled_minute) and not _already_ran_today(db, settings["timezone"]):
+        if (now.hour, now.minute) >= (scheduled_hour, scheduled_minute) and not _already_ran_today(db, settings["timezone"], settings.get("daylight_saving_enabled", True)):
             scheduler.add_job(run_daily_recommendation, kwargs={"triggered_by": "startup"})
     finally:
         db.close()
 
 
-def _already_ran_today(db, timezone_name: str) -> bool:
-    tz = ZoneInfo(timezone_name)
+def _already_ran_today(db, timezone_name: str, daylight_saving_enabled: bool = True) -> bool:
+    tz = configured_timezone({"timezone": timezone_name, "daylight_saving_enabled": daylight_saving_enabled})
     batches = db.scalars(select(RecommendationBatch).where(RecommendationBatch.triggered_by.in_(["schedule", "startup"]))).all()
     today = datetime.now(tz).date()
     for batch in batches:
@@ -140,7 +150,7 @@ def daily_recommendation_lanes(db, settings: dict) -> list[dict]:
     ai_profiles = [item for item in profiles if item.domain == "ai"]
     other_profiles = [item for item in profiles if item.domain != "ai"]
     if other_profiles:
-        day = datetime.now(ZoneInfo(settings.get("timezone", "Asia/Shanghai"))).date().toordinal()
+        day = datetime.now(configured_timezone(settings)).date().toordinal()
         offset = day % len(other_profiles)
         other_profiles = other_profiles[offset:] + other_profiles[:offset]
 

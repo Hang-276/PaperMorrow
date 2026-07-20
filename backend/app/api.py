@@ -53,7 +53,7 @@ async def workspace_chat(payload: WorkspaceChatRequest, db: Session = Depends(ge
     messages = [item.model_dump() for item in payload.history]
     messages.append({"role": "user", "content": payload.message})
     try:
-        answer = await LLMClient(db).chat_about_workspace(payload.page_title, payload.context, messages)
+        answer = await LLMClient(db).chat_about_workspace(payload.page_title, payload.context, messages, payload.response_detail)
     except LLMNotConfigured as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except httpx.HTTPError as exc:

@@ -6,7 +6,7 @@ import {
   MessageCircle, Send, Plus, Bot, User,
   BarChart3, KeyRound, Link2, Pencil, Trash2, Type,
   FlaskConical, Layers3, FolderKanban, ClipboardCheck,
-  Bell, House, ListTodo, PanelLeftClose, PanelLeftOpen,
+  Bell, House, ListTodo, PanelLeftClose, Globe2,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -21,11 +21,14 @@ import NotesPage from './NotesPage'
 import GlobalAssistant from './GlobalAssistant'
 import HomePage from './HomePage'
 import PlannerPage from './PlannerPage'
+import CoworkPage from './CoworkPage'
+import TimezoneSelect, { systemTimezone, timezoneLabel } from './timezones'
 import './features.css'
 import './library.css'
+import './layout-fixes.css'
 import type { AppSettings, Batch, ChatMessage, ChatSession, DeepWikiJob, LLMProfile, Paper, PlannerTask, ResearchProfile, SubmissionDeadline, Tag, TokenUsageStats } from './types'
 
-type View = 'home' | 'today' | 'planner' | 'research' | 'projects' | 'notes' | 'history' | 'learning' | 'deepwiki' | 'domains' | 'settings'
+type View = 'home' | 'today' | 'planner' | 'research' | 'projects' | 'notes' | 'history' | 'learning' | 'deepwiki' | 'domains' | 'cowork' | 'settings'
 
 const ReaderWorkspace = lazy(() => import('./ReaderWorkspace'))
 const WikiWorkspace = lazy(() => import('./WikiWorkspace'))
@@ -78,11 +81,15 @@ export default function App() {
   }, [settings?.font_size])
 
   const load = async () => {
-    const [tagData, settingData, todayData, historyData, jobData, researchData, taskData, deadlineData] = await Promise.all([
+    const [tagData, loadedSettings, todayData, historyData, jobData, researchData, taskData, deadlineData] = await Promise.all([
       api<Tag[]>('/api/tags'), api<AppSettings>('/api/settings'), api<Batch[]>('/api/recommendations/today'),
       api<Paper[]>('/api/recommendations/history'), api<DeepWikiJob[]>('/api/deepwiki/jobs'), api<ResearchProfile[]>('/api/research-profiles'),
       api<PlannerTask[]>('/api/planner/tasks'), api<SubmissionDeadline[]>('/api/planner/deadlines'),
     ])
+    const detectedTimezone=systemTimezone()
+    const settingData=loadedSettings.timezone_auto!==false&&loadedSettings.timezone!==detectedTimezone
+      ? await api<AppSettings>('/api/settings',{method:'PUT',body:JSON.stringify({timezone:detectedTimezone,timezone_auto:true})})
+      : loadedSettings
     setTags(tagData); setSettings(settingData); setToday(todayData); setHistory(historyData); setJobs(jobData); setResearchProfiles(researchData)
     setPlannerTasks(taskData); setSubmissionDeadlines(deadlineData)
     if (!selectedTags.length) setSelectedTags(settingData.daily_tag_ids.length ? settingData.daily_tag_ids : tagData.filter(t=>t.domain==='ai').slice(0, 2).map(t => t.id))
@@ -189,16 +196,23 @@ export default function App() {
     }
   }
 
+  const toggleSidebar=()=>setSidebarCollapsed(value=>{localStorage.setItem('papermorrow-sidebar-collapsed',value?'0':'1');return !value})
+
+  const updateTimezone=async(timezone:string)=>{
+    const updated=await api<AppSettings>('/api/settings',{method:'PUT',body:JSON.stringify({timezone,timezone_auto:false})})
+    setSettings(updated)
+  }
+
   const nav = [
     ['home', House, '起始页'], ['today', Radar, '论文推荐'], ['planner', ListTodo, '待办与 DDL'], ['research', FlaskConical, '专题调研'], ['projects', FolderKanban, '研究项目'], ['notes', NotebookPen, '学习笔记'], ['history', History, '推荐历史'], ['learning', Library, '学习库'],
-    ['deepwiki', Code2, 'DeepWiki'], ['domains', Layers3, '专业配置'], ['settings', SettingsIcon, '设置'],
+    ['deepwiki', Code2, 'DeepWiki'], ['domains', Layers3, '专业配置'], ['cowork', Bot, 'AI 协作'], ['settings', SettingsIcon, '设置'],
   ] as const
 
   const reminderCount=submissionDeadlines.filter(item=>{const days=Math.ceil((new Date(item.deadline_at).getTime()-Date.now())/86_400_000);return days>=0&&days<=item.remind_days_before}).length+plannerTasks.filter(item=>item.due_at&&new Date(item.due_at).getTime()<=Date.now()+86_400_000).length
 
   return <div className={`app-shell ${sidebarCollapsed?'sidebar-collapsed':''}`}>
     <aside className={`sidebar-shell ${mobileMenu ? 'open' : ''}`}>
-      <div className="brand"><div className="brand-mark"><img src="/papermorrow-logo.png" alt=""/></div><div><strong>PaperMorrow</strong><span>Read what matters next</span></div><button className="sidebar-collapse" title={sidebarCollapsed?'展开侧栏':'收起侧栏'} onClick={()=>setSidebarCollapsed(value=>{localStorage.setItem('papermorrow-sidebar-collapsed',value?'0':'1');return !value})}>{sidebarCollapsed?<PanelLeftOpen/>:<PanelLeftClose/>}</button></div>
+      <div className="brand"><button className="brand-mark" aria-label={sidebarCollapsed?'展开侧栏':'PaperMorrow'} title={sidebarCollapsed?'点击 Logo 展开侧栏':'PaperMorrow'} onClick={()=>sidebarCollapsed&&toggleSidebar()}><img src="/papermorrow-logo.png" alt=""/></button><div><strong>PaperMorrow</strong><span>Read what matters next</span></div><button className="sidebar-collapse" title="收起侧栏" onClick={toggleSidebar}><PanelLeftClose/></button></div>
       <nav>{nav.map(([id, Icon, label]) => <button key={id} title={sidebarCollapsed?label:undefined} className={view === id ? 'active' : ''} onClick={() => { setView(id); setMobileMenu(false) }}><Icon size={19}/><span>{label}</span>{view === id && <ChevronRight size={16}/>}</button>)}</nav>
       <button className="sidebar-foot" onClick={() => setAssistantOpen(true)}><Sparkles size={17}/><div><strong>研究助手</strong><span>{settings?.has_llm_api_key ? '随时询问当前页面' : '连接模型后开始'}</span></div><i className={settings?.has_llm_api_key ? 'online' : ''}/></button>
     </aside>
@@ -223,10 +237,11 @@ export default function App() {
       {view === 'research' && <ResearchPage onDataChanged={load}/>} 
       {view === 'projects' && <ProjectsPage/>}
       {view === 'notes' && <NotesPage focusPaperId={noteFocusPaperId} createSignal={noteCreateSignal}/>}
-      {view === 'planner' && <PlannerPage tasks={plannerTasks} deadlines={submissionDeadlines} onChanged={loadPlanner}/>}
+      {view === 'planner' && settings && <PlannerPage tasks={plannerTasks} deadlines={submissionDeadlines} timezone={settings.timezone} onTimezoneChange={updateTimezone} onChanged={loadPlanner}/>}
 
       {view === 'deepwiki' && <DeepWikiPage jobs={jobs} onOpen={setWikiJob} onRetry={retryWiki}/>} 
       {view === 'domains' && <DomainPacksPage/>}
+      {view === 'cowork' && <CoworkPage onOpenAssistant={()=>setAssistantOpen(true)}/>}
       {view === 'settings' && settings && <SettingsPage settings={settings} tags={tags} researchProfiles={researchProfiles} onSaved={async () => { await load(); setMessage('设置已保存') }}/>} 
     </main>
 
@@ -381,6 +396,7 @@ function SettingsPage({ settings, tags, researchProfiles, onSaved }: { settings:
     <div className="settings-grid">
       <div className="settings-card"><header><Languages/><div><h3>阅读语言</h3><p>英文标题始终显示，只切换摘要默认语言。</p></div></header><label>摘要默认显示<select value={form.default_abstract_language} onChange={e => setForm({ ...form, default_abstract_language:e.target.value })}><option value="zh">中文摘要</option><option value="en">English abstract</option></select></label></div>
       <div className="settings-card font-size-card"><header><Type/><div><h3>字体与阅读缩放</h3><p>调整后立即应用到主页面、智能阅读器和 DeepWiki。</p></div><span className="setting-badge">13–20px</span></header><label>全局字号 <strong>{form.font_size || 16}px</strong><input aria-label="全局字号" type="range" min="13" max="20" step="1" value={form.font_size || 16} onInput={e => previewFontSize(Number((e.target as HTMLInputElement).value))}/></label><div className="font-size-labels"><span>A− 紧凑</span><span>标准</span><span>大字 A+</span></div></div>
+      <div className="settings-card full timezone-card"><header><Globe2/><div><h3>日期与时区</h3><p>每日推荐、待办时间和会议/期刊 DDL 使用同一时区。</p></div><span className="setting-badge">{form.timezone_auto?'跟随本机':'手动设置'}</span></header><div className="timezone-settings-row"><label>应用时区<TimezoneSelect value={form.timezone} onChange={timezone=>setForm({...form,timezone,timezone_auto:false})}/><small>{timezoneLabel(form.timezone)}</small></label><div className="timezone-switches"><label><span><strong>跟随本机时区</strong><small>启动时读取操作系统设置</small></span><button type="button" aria-label="跟随本机时区" className={`switch ${form.timezone_auto?'on':''}`} onClick={()=>setForm({...form,timezone_auto:!form.timezone_auto,timezone:!form.timezone_auto?systemTimezone():form.timezone})}><i/></button></label><label><span><strong>夏令时自动调整</strong><small>关闭后固定使用该地区的标准时差</small></span><button type="button" aria-label="夏令时自动调整" className={`switch ${form.daylight_saving_enabled?'on':''}`} onClick={()=>setForm({...form,daylight_saving_enabled:!form.daylight_saving_enabled})}><i/></button></label></div></div></div>
       <div className="settings-card full daily-recommend-card"><header><CalendarClock/><div><h3>每日推荐计划</h3><p>按专业分别组织广度方向与自定义研究方向，让每天的阅读更聚焦，也保留适量跨方向发现。</p></div><span className="daily-summary">{form.daily_profile_ids.length} 个自定义 · {form.daily_tag_ids.length} 个通用</span><button aria-label="启用每日推荐" className={`switch ${form.daily_enabled ? 'on' : ''}`} onClick={() => setForm({ ...form, daily_enabled:!form.daily_enabled })}><i/></button></header><div className={!form.daily_enabled ? 'disabled-fields' : ''}><div className="daily-schedule"><label>推荐时间<input type="time" value={form.daily_time} onChange={e => setForm({ ...form, daily_time:e.target.value })}/></label><label>时区<select value={form.timezone} onChange={e => setForm({ ...form, timezone:e.target.value })}>{settings.timezone_options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label>每日总篇数<input type="number" min="1" max="30" value={form.daily_count} onChange={e => setForm({ ...form, daily_count:Number(e.target.value) })}/></label><div className="daily-plan-note"><strong>{form.daily_enabled?'计划已启用':'计划暂未启用'}</strong><span>关闭后仍可在推荐页手动生成。</span></div></div><div className="daily-domain-layout"><nav>{dailyDomains.map(([slug,name,description])=>{const domainTags=tags.filter(tag=>tag.domain===slug);const tagCount=domainTags.filter(tag=>form.daily_tag_ids.includes(tag.id)).length;const profileCount=researchProfiles.filter(profile=>profile.domain===slug&&form.daily_profile_ids.includes(profile.id)).length;return <button key={slug} className={dailyDomain===slug?'active':''} onClick={()=>setDailyDomain(slug)}><i className={`domain-dot ${slug}`}/><div><strong>{name}{slug==='ai'&&<em>重点优化</em>}</strong><span>{description}</span></div><b>{profileCount?`${profileCount} 自定`: `${tagCount}/${domainTags.length}`}</b></button>})}</nav><section><header><div><span>当前专业</span><h4>{dailyDomains.find(item=>item[0]===dailyDomain)?.[1]}</h4></div><div><button onClick={()=>setDailyDomainTags(true)}>全选通用</button><button onClick={()=>setDailyDomainTags(false)}>清空通用</button></div></header><div className="daily-profile-section"><div className="daily-subhead"><div><strong>我的研究方向</strong><span>按方向分别检索，多个方向会逐日轮换</span></div><label>推荐方式<select value={form.daily_profile_mode} onChange={e=>setForm({...form,daily_profile_mode:e.target.value})}><option value="mixed">聚焦 + 少量探索</option><option value="focus">仅聚焦方向</option></select></label></div>{dailyDomainProfiles.length?<div className="daily-profile-grid">{dailyDomainProfiles.map(profile=><button key={profile.id} className={form.daily_profile_ids.includes(profile.id)?'selected':''} onClick={()=>toggleDailyProfile(profile.id)}><i>{form.daily_profile_ids.includes(profile.id)?<Check/>:<Radar/>}</i><span><strong>{profile.name}</strong><small>{profile.description}</small></span></button>)}</div>:<div className="daily-domain-empty compact">该专业还没有自定义研究方向。可在下方“研究方向”中新建。</div>}</div><div className="daily-generic-section"><div className="daily-subhead"><div><strong>专业通用方向</strong><span>用于广度发现，也作为自定义方向的辅助召回</span></div></div>{dailyDomainTags.length?<div className="daily-direction-grid">{dailyDomainTags.map(tag=><button key={tag.id} className={form.daily_tag_ids.includes(tag.id)?'selected':''} onClick={()=>toggleDailyTag(tag.id)}><i>{form.daily_tag_ids.includes(tag.id)&&<Check/>}</i><span>{tag.name_zh}<small>{tag.name_en}</small></span></button>)}</div>:<div className="daily-domain-empty">该专业暂未配置通用方向，可通过自定义研究方向继续聚焦推荐。</div>}</div></section></div></div></div>
 
       <div className="settings-card full zotero-card"><header><Link2/><div><h3>Zotero 文献整理</h3><p>将论文元数据、个人标签和可选 Collection 同步到 Zotero；不上传 PDF，也不会远程删除条目。</p></div><span className={`connection ${settings.has_zotero_api_key&&settings.zotero_library_id?'connected':''}`}>{settings.has_zotero_api_key&&settings.zotero_library_id?'已配置':'未连接'}</span></header><div className="zotero-fields"><label>文献库类型<select value={form.zotero_library_type} onChange={e=>setForm({...form,zotero_library_type:e.target.value})}><option value="user">个人文献库</option><option value="group">群组文献库</option></select></label><label>Library ID<input value={form.zotero_library_id} onChange={e=>setForm({...form,zotero_library_id:e.target.value})} placeholder="Zotero 数字 ID"/></label><label>API Key<input type="password" value={form.zotero_api_key} onChange={e=>setForm({...form,zotero_api_key:e.target.value})} placeholder={settings.has_zotero_api_key?'已保存，留空不修改':'需要写入权限'}/></label><label>默认 Collection Key<input value={form.zotero_collection_key} onChange={e=>setForm({...form,zotero_collection_key:e.target.value})} placeholder="可选"/></label></div><div className="zotero-actions"><label className="checkbox-row"><input type="checkbox" checked={form.zotero_sync_tags} onChange={e=>setForm({...form,zotero_sync_tags:e.target.checked})}/>同步 PaperMorrow 个人标签</label><span>{zoteroStatus||'Library ID 可在 Zotero API Keys 页面查看。'}</span><button className="secondary" disabled={!form.zotero_library_id} onClick={testZotero}><Link2 size={15}/>保存并测试连接</button></div></div>

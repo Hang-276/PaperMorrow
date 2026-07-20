@@ -215,6 +215,8 @@ export type AppSettings = {
   daily_enabled: boolean
   daily_time: string
   timezone: string
+  timezone_auto: boolean
+  daylight_saving_enabled: boolean
   daily_count: number
   daily_tag_ids: number[]
   daily_profile_ids: number[]
