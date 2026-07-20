@@ -4,10 +4,12 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from backend.app.cowork_files import FileAccessDenied, read_authorized_text, resolve_authorized_path
+from backend.app.cowork_api import PlanStepInput, PlanUpdate, update_plan
 from backend.app.cowork_models import CoworkSession, CoworkStep, CoworkTask
 from backend.app.cowork_runtime import cancel_session, create_session, repair_interrupted_sessions, resume_session, run_next_step
 from backend.app.cowork_security import create_grant
@@ -33,6 +35,20 @@ def test_plan_is_bounded_editable_shape_and_cancel_stops_all_steps():
         assert all(step.status == "cancelled" for step in steps)
         with pytest.raises(RuntimeError):
             asyncio.run(run_next_step(db, item))
+
+
+def test_plan_content_can_be_edited_without_changing_step_shape():
+    engine = _engine()
+    with Session(engine) as db:
+        item = create_session(db, "整理文献证据")
+        db.commit()
+        task = db.scalar(select(CoworkTask).where(CoworkTask.session_id == item.id))
+        steps = db.scalars(select(CoworkStep).where(CoworkStep.task_id == task.id).order_by(CoworkStep.position)).all()
+        payload = PlanUpdate(steps=[PlanStepInput(title=f"修订步骤 {index}", description="仅使用已授权资料") for index, _ in enumerate(steps, 1)])
+        result = update_plan(item.id, payload, db)
+        assert [step["title"] for step in result["tasks"][-1]["steps"]] == [f"修订步骤 {index}" for index in range(1, len(steps) + 1)]
+        with pytest.raises(ValidationError):
+            PlanUpdate.model_validate({"steps": [{"title": "x", "unexpected": True}] * 3})
 
 
 def test_restart_can_resume_from_persisted_checkpoint(tmp_path: Path):

@@ -51,8 +51,13 @@ class GrantCreate(StrictPayload):
     duration: Literal["session", "permanent"] = "session"
 
 
+class PlanStepInput(StrictPayload):
+    title: str = Field(min_length=1, max_length=500)
+    description: str = Field(default="", max_length=20_000)
+
+
 class PlanUpdate(StrictPayload):
-    steps: list[dict] = Field(min_length=3, max_length=8)
+    steps: list[PlanStepInput] = Field(min_length=3, max_length=8)
 
 
 def _session(db: Session, session_id: str) -> CoworkSession:
@@ -155,6 +160,24 @@ async def run_next(session_id: str, db: Session = Depends(get_db)) -> dict:
         await run_next_step(db, item)
     except RuntimeError as exc:
         raise HTTPException(409, str(exc)) from exc
+    db.commit(); db.refresh(item)
+    return session_dict(db, item, detail=True)
+
+
+@router.put("/sessions/{session_id}/plan")
+def update_plan(session_id: str, payload: PlanUpdate, db: Session = Depends(get_db)) -> dict:
+    item = _session(db, session_id)
+    task = db.scalar(select(CoworkTask).where(CoworkTask.session_id == session_id).order_by(CoworkTask.id.desc()))
+    if not task:
+        raise HTTPException(404, "任务计划不存在")
+    steps = db.scalars(select(CoworkStep).where(CoworkStep.task_id == task.id).order_by(CoworkStep.position)).all()
+    if len(steps) != len(payload.steps):
+        raise HTTPException(422, "只能修改现有步骤内容，不能在运行中改变步骤数量")
+    if any(step.status == "running" for step in steps):
+        raise HTTPException(409, "步骤运行时不能修改计划，请先暂停")
+    for step, update in zip(steps, payload.steps, strict=True):
+        step.title = update.title.strip()
+        step.description = update.description.strip()
     db.commit(); db.refresh(item)
     return session_dict(db, item, detail=True)
 
