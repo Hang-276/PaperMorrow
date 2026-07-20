@@ -152,6 +152,16 @@ export type Batch = {
   profile?: { id: number; name: string; description?: string } | null
 }
 
+export type PlannerTask = {
+  id:number; title:string; details:string; due_at?:string|null; priority:'low'|'medium'|'high'; status:'pending'|'completed'
+  project_id?:number|null; completed_at?:string|null; created_at:string; updated_at:string
+}
+
+export type SubmissionDeadline = {
+  id:number; venue_name:string; venue_type:'conference'|'journal'; round_name:string; deadline_at:string; timezone_name:string
+  domain:string; website_url:string; notes:string; remind_days_before:number; enabled:boolean; source:string; created_at:string; updated_at:string
+}
+
 export type ResearchProfile = {
   id: number
   name: string

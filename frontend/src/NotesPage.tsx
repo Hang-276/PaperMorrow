@@ -47,7 +47,7 @@ function PaperPicker({ papers, selected, onClose, onConfirm }: { papers: Paper[]
   </section></div>
 }
 
-export default function NotesPage({focusPaperId}:{focusPaperId?:number|null}) {
+export default function NotesPage({focusPaperId,createSignal=0}:{focusPaperId?:number|null;createSignal?:number}) {
   const [notes, setNotes] = useState<UnifiedNote[]>([])
   const [activeId, setActiveId] = useState<number | null>(null)
   const [papers, setPapers] = useState<Paper[]>([])
@@ -67,6 +67,8 @@ export default function NotesPage({focusPaperId}:{focusPaperId?:number|null}) {
       setNotes(noteList); setPapers(paperList); setActiveId(noteList.find(note=>focusPaperId&&note.paper_ids.includes(focusPaperId))?.id||noteList[0]?.id||null)
     }).catch(error => setNotice(error instanceof Error ? error.message : '暂时无法加载笔记'))
   }, [focusPaperId])
+
+  useEffect(()=>{if(createSignal>0)setCreating(true)},[createSignal])
 
   useEffect(() => {
     const receiveExternalUpdate = (event: Event) => {
