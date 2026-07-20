@@ -8,12 +8,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .cowork_models import CoworkArtifact, CoworkMessage, CoworkSession, CoworkStep, CoworkTask, PermissionGrant, ToolCall
+from .cowork_models import CoworkArtifact, CoworkMessage, CoworkSession, CoworkStep, CoworkTask, PermissionGrant, SkillManifest, ToolCall
 from .cowork_runtime import add_message, cancel_session, create_plan, create_session, pause_session, resume_session, retry_step, run_next_step
 from .cowork_security import create_grant, revoke_grant
 from .cowork_tools import DEFAULT_REGISTRY
 from .database import get_db
 from .settings_service import get_active_llm_profile
+from .cowork_skills import skill_dict
 
 
 router = APIRouter(prefix="/api/cowork", tags=["cowork"])
@@ -97,6 +98,11 @@ def capabilities(db: Session = Depends(get_db)) -> dict:
     profile = get_active_llm_profile(db)
     provider = profile.provider if profile else "none"
     return {"configured": bool(profile), "provider": provider, "thinking_efforts": ["low", "medium", "high"] if provider in {"openai", "claude"} else ["low", "medium"], "tools": DEFAULT_REGISTRY.list_tools()}
+
+
+@router.get("/skills")
+def list_skills(db: Session = Depends(get_db)) -> list[dict]:
+    return [skill_dict(item) for item in db.scalars(select(SkillManifest).where(SkillManifest.enabled.is_(True)).order_by(SkillManifest.name)).all()]
 
 
 @router.get("/sessions")

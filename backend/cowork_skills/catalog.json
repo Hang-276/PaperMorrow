@@ -1,0 +1,9 @@
+[
+  {"name":"literature-search","description":"从学习库检索文献并保守识别重复候选。","version":"1.0.0","entrypoint":"literature-search/SKILL.md","allowed_tools":["library.search","library.read_paper"],"source":"PaperMorrow built-in","license":"MIT"},
+  {"name":"paper-evidence-reading","description":"精读论文并把结论定位到可用摘要或全文证据。","version":"1.0.0","entrypoint":"paper-evidence-reading/SKILL.md","allowed_tools":["library.read_paper","notes.create_draft"],"source":"PaperMorrow built-in","license":"MIT"},
+  {"name":"systematic-review","description":"形成所有结论可追溯到论文来源的专题综述。","version":"1.0.0","entrypoint":"systematic-review/SKILL.md","allowed_tools":["library.search","library.read_paper","notes.create_draft"],"source":"PaperMorrow built-in","license":"MIT"},
+  {"name":"experiment-audit","description":"比较授权实验记录、检查异常并引用实验编号。","version":"1.0.0","entrypoint":"experiment-audit/SKILL.md","allowed_tools":["projects.search","notes.create_draft"],"source":"PaperMorrow built-in","license":"MIT"},
+  {"name":"research-presentation","description":"生成组会论文汇报或研究进度汇报的可编辑大纲。","version":"1.0.0","entrypoint":"research-presentation/SKILL.md","allowed_tools":["library.read_paper","projects.search","notes.read"],"source":"PaperMorrow built-in","license":"MIT"},
+  {"name":"document-export","description":"把 Markdown 研究内容整理为 DOCX、PDF 或 XLSX 前的结构化草稿。","version":"1.0.0","entrypoint":"document-export/SKILL.md","allowed_tools":["notes.read","notes.create_draft"],"source":"PaperMorrow built-in","license":"MIT"},
+  {"name":"citation-and-reproduction-check","description":"检查引用边界并生成复现准备清单。","version":"1.0.0","entrypoint":"citation-and-reproduction-check/SKILL.md","allowed_tools":["library.read_paper","projects.search","notes.create_draft","planner.create_task"],"source":"PaperMorrow built-in","license":"MIT"}
+]
