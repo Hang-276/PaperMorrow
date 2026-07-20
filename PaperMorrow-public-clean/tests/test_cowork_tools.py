@@ -32,7 +32,7 @@ def test_registry_exposes_strict_json_schemas():
 
 def test_schema_error_never_executes_tool(db: Session):
     with pytest.raises(ValidationError):
-        DEFAULT_REGISTRY.invoke(db, "s1", "planner.create_task", {"title": "ok", "unexpected": "do it"}, approved=True)
+        DEFAULT_REGISTRY.invoke(db, "s1", "planner.create_task", {"title": "ok", "unexpected": "do it"})
     assert db.scalar(select(ToolCall)) is None
     assert db.scalar(select(CoworkAuditLog).where(CoworkAuditLog.event_type == "tool.schema_rejected"))
 
@@ -45,12 +45,12 @@ def test_unauthorized_read_is_denied_and_prompt_injection_cannot_grant_access(db
     assert not db.scalar(select(ToolCall))
 
 
-def test_write_requires_approval_and_executes_only_after_confirmation(db: Session):
+def test_write_requires_bound_approval_and_boolean_bypass_is_rejected(db: Session):
     with pytest.raises(ToolApprovalRequired) as pending:
         DEFAULT_REGISTRY.invoke(db, "s1", "planner.create_task", {"title": "Review evidence"})
     assert pending.value.approval.status == "pending"
-    result = DEFAULT_REGISTRY.invoke(db, "s1", "planner.create_task", {"title": "Review evidence"}, approved=True)
-    assert result["item"]["title"] == "Review evidence"
+    with pytest.raises(ToolDenied, match="ToolCall"):
+        DEFAULT_REGISTRY.invoke(db, "s1", "planner.create_task", {"title": "Review evidence"}, approved=True)
 
 
 def test_granted_page_object_can_be_read(db: Session):

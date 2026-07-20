@@ -323,6 +323,52 @@ def _migration_010_cowork_foundation(connection) -> None:
         connection.execute(text(statement))
 
 
+def _migration_011_cowork_multi_agent(connection) -> None:
+    columns = {item["name"] for item in inspect(connection).get_columns("cowork_sessions")}
+    for name, definition in (
+        ("agent_token_budget", "INTEGER NOT NULL DEFAULT 120000"),
+        ("agent_tokens_used", "INTEGER NOT NULL DEFAULT 0"),
+        ("max_parallel_agents", "INTEGER NOT NULL DEFAULT 3"),
+        ("delegation_budget", "INTEGER NOT NULL DEFAULT 8"),
+    ):
+        if name not in columns:
+            connection.execute(text(f"ALTER TABLE cowork_sessions ADD COLUMN {name} {definition}"))
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS cowork_agent_instances (
+        id VARCHAR(64) PRIMARY KEY,
+        session_id VARCHAR(64) NOT NULL REFERENCES cowork_sessions(id) ON DELETE CASCADE,
+        task_id INTEGER REFERENCES cowork_tasks(id) ON DELETE SET NULL,
+        parent_agent_id VARCHAR(64) REFERENCES cowork_agent_instances(id) ON DELETE SET NULL,
+        role VARCHAR(80) NOT NULL, display_name VARCHAR(160) NOT NULL,
+        status VARCHAR(24) NOT NULL DEFAULT 'idle', objective TEXT NOT NULL DEFAULT '',
+        instructions TEXT NOT NULL DEFAULT '', allowed_tools_json TEXT NOT NULL DEFAULT '[]',
+        context_refs_json TEXT NOT NULL DEFAULT '[]', token_budget INTEGER NOT NULL DEFAULT 20000,
+        tokens_used INTEGER NOT NULL DEFAULT 0, max_iterations INTEGER NOT NULL DEFAULT 6,
+        iterations_used INTEGER NOT NULL DEFAULT 0, error TEXT, created_at DATETIME NOT NULL,
+        started_at DATETIME, finished_at DATETIME, updated_at DATETIME NOT NULL
+    )"""))
+    connection.execute(text("""CREATE TABLE IF NOT EXISTS cowork_delegations (
+        id VARCHAR(64) PRIMARY KEY,
+        session_id VARCHAR(64) NOT NULL REFERENCES cowork_sessions(id) ON DELETE CASCADE,
+        task_id INTEGER REFERENCES cowork_tasks(id) ON DELETE SET NULL,
+        step_id INTEGER REFERENCES cowork_steps(id) ON DELETE SET NULL,
+        parent_agent_id VARCHAR(64) NOT NULL REFERENCES cowork_agent_instances(id) ON DELETE CASCADE,
+        child_agent_id VARCHAR(64) NOT NULL UNIQUE REFERENCES cowork_agent_instances(id) ON DELETE CASCADE,
+        status VARCHAR(24) NOT NULL DEFAULT 'pending', objective TEXT NOT NULL,
+        input_context_json TEXT NOT NULL DEFAULT '[]', output_schema_json TEXT NOT NULL DEFAULT '{}',
+        result_json TEXT NOT NULL DEFAULT '{}', result_summary TEXT NOT NULL DEFAULT '',
+        token_budget INTEGER NOT NULL DEFAULT 20000, tokens_used INTEGER NOT NULL DEFAULT 0,
+        retry_count INTEGER NOT NULL DEFAULT 0, error TEXT, created_at DATETIME NOT NULL,
+        started_at DATETIME, finished_at DATETIME
+    )"""))
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS ix_cowork_agents_session ON cowork_agent_instances(session_id, status)",
+        "CREATE INDEX IF NOT EXISTS ix_cowork_agents_parent ON cowork_agent_instances(parent_agent_id)",
+        "CREATE INDEX IF NOT EXISTS ix_cowork_delegations_session ON cowork_delegations(session_id, status)",
+        "CREATE INDEX IF NOT EXISTS ix_cowork_delegations_parent ON cowork_delegations(parent_agent_id)",
+    ):
+        connection.execute(text(statement))
+
+
 MIGRATIONS = [
     ("001_domain_packs", _migration_001_domain_packs),
     ("002_research_projects", _migration_002_research_projects),
@@ -334,6 +380,7 @@ MIGRATIONS = [
     ("008_presentation_drafts", _migration_008_presentation_drafts),
     ("009_planner_deadlines", _migration_009_planner_deadlines),
     ("010_cowork_foundation", _migration_010_cowork_foundation),
+    ("011_cowork_multi_agent", _migration_011_cowork_multi_agent),
 ]
 
 
