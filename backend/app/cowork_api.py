@@ -228,8 +228,9 @@ async def run_team(session_id: str, db: Session = Depends(get_db)) -> dict:
         # Deliberately serialize DB commits; experts remain isolated and SQLite stays reliable.
         for delegation in queued:
             await execute_delegation(db, delegation)
-    except LLMNotConfigured as exc:
-        raise HTTPException(409, str(exc)) from exc
+    except LLMNotConfigured:
+        db.expire_all()
+        return agent_state(db, _session(db, session_id))
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(409, str(exc)) from exc
     db.expire_all()
