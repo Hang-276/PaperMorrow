@@ -42,6 +42,8 @@ jobs:
       - name: Record Windows environment
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           New-Item -ItemType Directory -Force artifacts | Out-Null
           Get-ComputerInfo |
             Select-Object WindowsProductName, WindowsVersion, OsBuildNumber, OsArchitecture |
@@ -54,6 +56,8 @@ jobs:
       - name: Install Python and Node dependencies
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           python -m pip install --upgrade pip
           python -m pip install -e .
           python -m pip install -r requirements-desktop.txt
@@ -74,6 +78,8 @@ jobs:
         env:
           PYINSTALLER_CONFIG_DIR: ${{ github.workspace }}\.pyinstaller-cache
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           npm --prefix frontend run build
           npm --prefix presentation-studio run build
           python desktop/make_icons.py
@@ -88,6 +94,8 @@ jobs:
       - name: Cold-start packaged application three times
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           $exe = (Resolve-Path "desktop_dist\PaperMorrow\PaperMorrow.exe").Path
           1..3 | ForEach-Object {
             $attempt = $_
@@ -125,6 +133,8 @@ jobs:
       - name: Build Windows installer and portable archive
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           choco install innosetup --no-progress -y
           Compress-Archive `
             -Path desktop_dist\PaperMorrow `
