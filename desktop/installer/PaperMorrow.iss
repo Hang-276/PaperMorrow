@@ -30,7 +30,9 @@ VersionInfoProductName={#AppName}
 VersionInfoDescription=PaperMorrow 科研工作台安装程序
 
 [Languages]
+#if FileExists(AddBackslash(CompilerPath) + "Languages\ChineseSimplified.isl")
 Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+#endif
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
