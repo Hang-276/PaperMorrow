@@ -21,9 +21,9 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -31,7 +31,7 @@ jobs:
             pyproject.toml
             requirements-desktop.txt
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: npm
@@ -55,8 +55,9 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -e .
           python -m pip install -r requirements-desktop.txt
+          python -m pip install "pytest>=8.3,<9"
           npm --prefix frontend ci
           npm --prefix presentation-studio ci
 
@@ -138,7 +139,7 @@ jobs:
 
       - name: Upload Windows stability report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: windows-stability-report
           path: artifacts/
