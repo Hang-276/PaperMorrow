@@ -19,7 +19,8 @@ class Project(BaseModel):
 
     def map_path(self, path: str) -> str:
         root = Path(self.root_dir).resolve()
-        candidate = Path(path)
+        raw_path = str(path)
+        candidate = Path(raw_path)
         if candidate.is_absolute():
             resolved = candidate.resolve()
             # Code models commonly spell a repository-root path as
@@ -29,8 +30,15 @@ class Project(BaseModel):
             # below and checked again.
             if resolved == root or root in resolved.parents:
                 target = resolved
+            elif candidate.drive:
+                target = resolved
             else:
-                target = (root / str(candidate).lstrip("/\\")).resolve()
+                target = (root / raw_path.lstrip("/\\")).resolve()
+        elif not candidate.drive and raw_path.startswith(("/", "\\")):
+            # On Windows, `\src\main.py` is rooted on the current drive but
+            # pathlib does not consider it absolute without a drive letter.
+            # Code models use this spelling for repository-root paths.
+            target = (root / raw_path.lstrip("/\\")).resolve()
         else:
             target = (root / candidate).resolve()
         if target != root and root not in target.parents:

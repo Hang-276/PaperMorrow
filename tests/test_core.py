@@ -551,7 +551,7 @@ def test_deepwiki_empty_llm_page_falls_back_to_real_markdown(tmp_path):
     wiki = asyncio.run(_generate_llm_wiki(EmptyPageLLM(), "https://github.com/example/demo", "context", analysis))
     assert _valid_page_content(wiki["pages"][0]["content"])
     _write_wiki(tmp_path, wiki)
-    saved = (tmp_path / "pages" / "overview.md").read_text()
+    saved = (tmp_path / "pages" / "overview.md").read_text(encoding="utf-8")
     assert "相关源码" in saved and "def run" in saved
 
 
