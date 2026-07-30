@@ -14,8 +14,8 @@
     "build": "tsc -p tsconfig.json",
     "generate:paper": "npm run build --silent && node dist/src/cli.js fixtures/paper-report.json output/paper-report.pptx",
     "generate:progress": "npm run build --silent && node dist/src/cli.js fixtures/research-progress.json output/research-progress.pptx",
-    "test": "npm run build --silent && node --test dist/tests/*.test.js",
-    "test:runtime": "npm run build --silent && node --test dist/tests/*.test.js",
+    "test": "npm run build --silent && node scripts/run-tests.mjs",
+    "test:runtime": "npm run build --silent && node scripts/run-tests.mjs",
     "check": "npm run test"
   },
   "dependencies": {
