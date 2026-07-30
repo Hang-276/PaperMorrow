@@ -1,9 +1,9 @@
 import os
-from typing import Callable
+from typing import Callable, TypeAlias
 
 from gitignore_parser import parse_gitignore, parse_gitignore_str
 
-type IgnoreRule = Callable[[str], bool]
+IgnoreRule: TypeAlias = Callable[[str], bool]
 
 GLOBAL_GITIGNORE = """
 # Ignore git files
